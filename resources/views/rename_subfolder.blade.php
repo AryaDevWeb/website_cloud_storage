@@ -1,32 +1,45 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+@extends('layouts.app')
 
-    @if (isset($cari_folder))
-        <title>{{ $cari_folder->nama_folder }}</title>
-    
-    @endif
-    
-</head>
-<body>
+@section('title', isset($cari_folder) ? 'Rename: ' . $cari_folder->nama_folder : 'Rename Folder')
 
-    @if (isset($cari_folder))
-        <h1>Rename: {{ $cari_folder->nama_folder }}</h1>
+@section('content')
 
+    {{-- Breadcrumb --}}
+    <div class="flex items-center gap-2 mb-6 text-sm">
+        <a href="/beranda/{{ auth()->id() }}" class="text-[#94a3b8] hover:text-[#3b82f6] transition-colors">Beranda</a>
+        <svg class="w-4 h-4 text-[#334155]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5l7 7-7 7"/>
+        </svg>
+        <span class="text-white">Rename Folder</span>
+    </div>
 
+    <div class="max-w-lg">
+        @if(isset($cari_folder))
+        <div class="bg-[#111827] border border-[#1e293b] rounded-lg p-6">
+            <div class="flex items-center gap-3 mb-5">
+                <div class="w-10 h-10 bg-[#1e293b] rounded-lg flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5 text-[#3b82f6]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-sm font-medium text-white">Rename Folder</h1>
+                    <p class="text-xs text-[#94a3b8]">{{ $cari_folder->nama_folder }}</p>
+                </div>
+            </div>
 
-        <form action="/subfolder_rename/{{ $cari_folder->id }}">
-            <input value="{{ $cari_folder->nama_folder }}" name="rename" type="text">
-            <button>Rename</button>
-        </form>
-    
-    @endif
+            <form action="/subfolder_rename/{{ $cari_folder->id }}" class="space-y-4">
+                <div>
+                    <label class="block text-sm text-[#94a3b8] mb-1.5">Nama baru</label>
+                    <input value="{{ $cari_folder->nama_folder }}" name="rename" type="text"
+                        class="w-full px-3 py-2.5 bg-[#0a0f1e] border border-[#1e293b] rounded-lg text-sm text-[#e2e8f0] placeholder-[#475569] focus:outline-none focus:border-[#3b82f6] transition-colors">
+                </div>
+                <button class="w-full py-2.5 bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-medium rounded-lg transition-colors">
+                    Rename
+                </button>
+            </form>
+        </div>
+        @endif
+    </div>
 
-    <form action="/beranda/{{ auth()->id() }}">
-        <button>Beranda</button>
-    </form>
-    
-</body>
-</html>
+@endsection
