@@ -144,6 +144,7 @@
     @endif
 
     @foreach (auth()->user()->folders->where('parent_id', operator: null) as $newFolder )
+    <h3>Tempat: {{ $newFolder->path }}</h3>
         <form action="/folder_open/{{ $newFolder->id}}">
             <button>{{ $newFolder->nama_folder }}</button>
             

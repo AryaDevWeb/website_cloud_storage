@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Storage;
 use App\Models\Folder;
 use Illuminate\Support\Str;
 use Spatie\PdfToText\Pdf;
+use Illuminate\Validation\Rule;
 
 
 class Beranda extends Controller {
@@ -85,7 +86,14 @@ class Beranda extends Controller {
     public function folder(Request $folderBaru)
     {
         $folderBaru->validate([
-            'nama' => 'required|min:3'
+            'nama' => [
+                'required',
+                'min:3',
+                Rule::unique('folders','nama_folder')->where(function ($query) use ($folderBaru) {
+                    return $query->where('user_id', auth()->id())->where('parent_id', $folderBaru->parent_id);
+
+                })
+            ],
 
         ]);
 
@@ -93,13 +101,37 @@ class Beranda extends Controller {
 
         $strip_andalan = str_replace(' ','_',$folderBaru->nama);
 
+         if ($folderBaru->parent_id) {
+            $folder_utama = Folder::find($folderBaru->parent_id);
+            $tempat_direktori = 'data_user/' . $user . '/' . $folder_utama->nama_folder .'/' . $folderBaru->nama_folder;
+
+        }else {
+            $tempat_direktori = 'data_user/' . $user .'/' . $folderBaru->nama_folder;
+
+        }
+
+        if (!Storage::exists($tempat_direktori)) {
+            $path = Storage::makeDirectory($tempat_direktori);
+            
+        }
+
+
+
+
         $folder_kedua =  Folder:: create([
             'nama_folder' => $strip_andalan,
             'user_id' => auth()->id(),
             'parent_id' => $folderBaru->input('parent_id'),
-            'permission' => 1
+            'permission' => 1,
+            'path' => $tempat_direktori
 
         ]);
+
+        if ($folderBaru->nama == $folder_kedua->nama_folder) {
+            return back()->with('status','maaf nama folder tidak boleh sama');
+        }
+
+  
 
 
         $tambah_koin = Wallet::firstOrCreate(
@@ -108,21 +140,7 @@ class Beranda extends Controller {
         );
         $tambah_koin->increment('koin', 10);
 
-        if ($folder_kedua->parent_id) {
-            $folder_utama = Folder::find($folder_kedua->parent_id);
-            $tempat_direktori = 'data_user/' . $user . '/' . $folder_utama->nama_folder .'/' . $folder_kedua->nama_folder;
-
-        }else {
-            $tempat_direktori = 'data_user/' . $user .'/' . $folder_kedua->nama_folder;
-
-        }
-
-    
-
-        if (!Storage::exists($tempat_direktori)) {
-            Storage::makeDirectory($tempat_direktori);
-            
-        }
+      
             
 
         return back()
@@ -135,7 +153,7 @@ class Beranda extends Controller {
     {
         $isi_folder = Folder::with(relations: ['children', 'user'])->findOrFail(id: $id);
 
-        if ($isi_folder->user_id !== auth()->id() && $isi_folder->permission == 0) {
+        if ( $isi_folder->permission == 0) {
             abort(403, 'maaf anda tidak ada perizinan');
         }
 
@@ -229,15 +247,6 @@ class Beranda extends Controller {
             $ukuran = $file->getSize();
 
 
-            Gallery::create([
-                'user_id' => auth()->id(),
-                'folder_id' => $upload_subfolder->input('folder_id'),
-                'file' => $nama,
-                'ukuran' => $ukuran,
-                'nama_tampilan' => $nama
-
-
-            ]);
 
             $folder_utama = Folder::find($upload_subfolder->input('folder_id'));
 
@@ -258,7 +267,18 @@ class Beranda extends Controller {
                 $tempat_file = 'data_user/' . $akun . '/' . $folder_kedua->nama_folder . '/' . $folder_utama->nama_folder;
             }
 
-            Storage::putFileAs($tempat_file,$file,$nama);
+            $path = Storage::putFileAs($tempat_file,$file,$nama);
+
+             Gallery::create([
+                'user_id' => auth()->id(),
+                'folder_id' => $upload_subfolder->input('folder_id'),
+                'file' => $nama,
+                'ukuran' => $ukuran,
+                'nama_tampilan' => $nama,
+                'path' => $path
+
+
+            ]);
 
     
             return back()->with('nama_tampil' , $nama);
@@ -471,7 +491,7 @@ class Beranda extends Controller {
 
         $status_rename = 'File berhasil direname!';  
 
-        return view('beranda',compact(var_name: 'status_rename'));
+        return redirect('/beranda/' . auth()->id())->with('status',$status_rename);
 
     }
 
@@ -531,7 +551,7 @@ class Beranda extends Controller {
         $pesan_berubah = 'File berhasil direname';
 
 
-        return view('beranda',compact('pesan_berubah'));
+        return redirect('/folder')->with('status',$pesan_berubah);
 
 
     }

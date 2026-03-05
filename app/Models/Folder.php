@@ -12,7 +12,8 @@ class Folder extends Model
         'user_id',
         'parent_id',
         'nama_folder',
-        'permission'
+        'permission',
+        'path'
     ];
 
     public function user()

@@ -70,6 +70,8 @@
     @if (isset($isi_folder))
          @foreach ($isi_folder->files as $isi_file )
 
+         <h3>Tempat: {{ $isi_file->path }}</h3>
+
         <form action="/open_subfile/{{ $isi_file->id }}" method="GET">
             <button>{{ $isi_file->file }}</button>
 
@@ -103,6 +105,7 @@
 
     @if (isset($isi_folder))
         @foreach ($isi_folder->children as $subfolder )
+        <h3>Tempat: {{ $subfolder->path }}</h3>
         <form action="/folder_open/{{ $subfolder->id }}">
             <button>{{ $subfolder->nama_folder }}</button>
 
