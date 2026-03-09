@@ -54,8 +54,15 @@
                     </div>
                     <div class="h-1.5 w-full bg-[#e2e8f0] rounded-full overflow-hidden">
                         @php
-                            $percentage = (auth()->user()->storage_used / auth()->user()->storage_quota) * 100;
+                            $storageUsed = auth()->user()->storage_used ?? 0;
+                            $storageLimit = auth()->user()->storage_limit ?? 0; // Pastikan nama kolom sesuai di DB
+                            $percentage = $storageLimit > 0 ? ($storageUsed / $storageLimit) * 100 : 0;
                         @endphp
+
+                        <span>
+                            {{ number_format($storageUsed / 1024 / 1024, 1) }}MB / 
+                            {{ $storageLimit > 0 ? number_format($storageLimit / 1024 / 1024, 1) . 'MB' : 'Unlimited' }}
+                        </span>
                         <div class="h-full bg-[#2563eb] rounded-full" style="width: {{ min($percentage, 100) }}%"></div>
                     </div>
                 </div>
