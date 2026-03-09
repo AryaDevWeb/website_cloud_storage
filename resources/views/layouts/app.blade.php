@@ -54,8 +54,16 @@
                     </div>
                     <div class="h-1.5 w-full bg-[#e2e8f0] rounded-full overflow-hidden">
                         @php
-                            $percentage = (auth()->user()->storage_used / auth()->user()->storage_quota) * 100;
+                            $used = auth()->user()->storage_used ?? 0;
+                            $limit = auth()->user()->storage_limit ?: 104857600;
+                            $percentage = ($used / $limit) * 100;
+                            $percentage = $percentage > 100 ? 100 : $percentage; // Jika 0, otomatis anggap 100MB
                         @endphp
+
+                        <span>
+                                {{ number_format($used / 1024 / 1024, 1) }}MB / 
+                                {{ number_format($limit / 1024 / 1024, 0) }}MB
+                        </span>
                         <div class="h-full bg-[#2563eb] rounded-full" style="width: {{ min($percentage, 100) }}%"></div>
                     </div>
                 </div>
