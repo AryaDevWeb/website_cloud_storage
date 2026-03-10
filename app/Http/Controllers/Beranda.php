@@ -337,6 +337,8 @@ class Beranda extends Controller
         $file = Gallery::findOrFail($id);
         $path = storage_path('app/' . $file->path);
 
+        $waktu = is_null($file->riwayat) ? 'belum pernah dilihat' : $file->riwayat->diffForHumans();
+
         if (!file_exists($path)) {
             return back()->with('error', 'File tidak ditemukan');
         }
@@ -369,6 +371,6 @@ class Beranda extends Controller
             default: $mime = 'text/plain';
         }
 
-        return view('lihat', compact('base64', 'file', 'extension', 'mime'));
+        return view('lihat', compact('base64', 'file', 'extension', 'mime','waktu'));
     }
 }
