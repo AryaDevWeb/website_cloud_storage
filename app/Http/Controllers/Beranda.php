@@ -18,6 +18,22 @@ use Illuminate\Validation\Rule;
 
 class Beranda extends Controller
 {
+    public function dashboard($id)
+    {
+        $user = User::findOrFail($id);
+        $totalFiles = $user->galleries()->count();
+        $totalFolders = $user->folders()->count();
+        $usedMB = number_format($user->storage_used / 1024 / 1024, 1);
+        $remainingMB = number_format(($user->storage_quota - $user->storage_used) / 1024 / 1024, 1);
+        $totalMB = number_format($user->storage_quota / 1024 / 1024, 0);
+        $percentage = ($user->storage_used / $user->storage_quota) * 100;
+        $recentFiles = $user->galleries()->latest()->take(5)->get();
+
+        return view('dashboard', compact(
+            'user', 'totalFiles', 'totalFolders', 'usedMB', 'remainingMB', 'totalMB', 'percentage', 'recentFiles'
+        ));
+    }
+
     public function akun($id)
     {
         $user = User::findOrFail($id);

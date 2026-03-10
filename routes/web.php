@@ -19,12 +19,15 @@ Route::post('/register', [Register::class, 'register']);
 
 Route::get('/', function () {
     if (auth()->check()) {
-        return redirect('/beranda/' . auth()->id());
+        return redirect('/dashboard/' . auth()->id());
     }
     return view('register');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    // Dashboard
+    Route::get('/dashboard/{id}', [Beranda::class, 'dashboard'])->name('dashboard');
+
     // Beranda & Core Actions
     Route::get('/beranda/{id}', [Beranda::class, 'akun'])->name('beranda');
     Route::post('/logout', [Beranda::class, 'logout']);
@@ -56,6 +59,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::middleware(['auth', 'throttle:10,1'])->group(function () {
     Route::get('/download/{id}', [Beranda::class, 'download_file']);
 });
+
+Route::get('/modern-dashboard', function () {
+    return view('modern_dashboard');
+})->middleware(['auth']);
+
+Route::get('/cloud', function () {
+    return view('cloud');
+})->middleware(['auth']);
+
 
 
 
