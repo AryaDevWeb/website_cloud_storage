@@ -145,7 +145,7 @@ export function uploadFile(file, folderId, { onProgress, onDone, onError }) {
 
     /* REAL: XHR for progress tracking */
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/upload');
+    xhr.open('POST', '/upload');
     xhr.setRequestHeader('X-CSRF-TOKEN', CSRF());
     xhr.upload.addEventListener('progress', e => {
         if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
