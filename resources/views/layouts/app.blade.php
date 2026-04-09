@@ -50,9 +50,11 @@
 <div id="selection-bar" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-3 bg-gray-800 text-white rounded-2xl shadow-lg">
     <span id="sel-count" class="text-sm font-medium mr-2">0 selected</span>
     <div class="w-px h-5 bg-white/20"></div>
-    <button id="sel-download" class="p-2 rounded-lg hover:bg-white/10 transition-colors" aria-label="Download selected">
-        <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-    </button>
+   <form action="/download/{{ auth()->id() }}">
+        <button id="sel-download" class="p-2 rounded-lg hover:bg-white/10 transition-colors" aria-label="Download selected">
+            <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        </button>
+   </form>
     <button id="sel-move" class="p-2 rounded-lg hover:bg-white/10 transition-colors" aria-label="Move selected">
         <svg class="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
     </button>
