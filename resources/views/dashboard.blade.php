@@ -45,7 +45,7 @@
 
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-        <button  class="flex items-center gap-4 p-5 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50 text-left group transition-colors">
+        <button id="upload-btn" onclick="document.getElementById('file-input').click()"  class="flex items-center gap-4 p-5 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50/50 text-left group transition-colors">
             <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center group-hover:bg-blue-600 transition-colors"><svg class="w-6 h-6 text-blue-600 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12"/></svg></div>
             <div><p class="text-sm font-semibold text-gray-800">Upload File</p><p class="text-xs text-gray-500">Add files to your storage</p></div>
         </button>
@@ -55,11 +55,16 @@
         </button>
     </div>
 
-     <form action="/upload" method="POST" enctype="multipart/form-data" class="hidden">
+    <form  id="upload-form" action="/upload" method="POST" enctype="multipart/form-data">
+    
         @csrf
         <input type="file" id="file-input" name="upload" onchange="document.getElementById('upload-form').submit()">
-        <input type="hidden" name="folder_id" value="{{ $current_folder_id ?? '' }}">
+        
+        <button>Upload</button>
     </form>
+    
+     
+    
 
     {{-- Recent files --}}
     @if(isset($file) && $file->count())

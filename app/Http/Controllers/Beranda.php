@@ -127,9 +127,7 @@ class Beranda extends Controller
         $user->increment('storage_used', $fileSize);
         Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
 
-        return response()->json([
-            'file' => $nama_tampilan
-        ]);
+        return back()->with("nama_file",$nama_tampilan);
     }
     return back()->with('error', 'Gagal upload file');
 }
