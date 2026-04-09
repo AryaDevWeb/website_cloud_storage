@@ -34,7 +34,7 @@
                 </svg>
                 <span class="hidden lg:block text-sm">Files</span>
             </a>
-            <a href="#" class="flex items-center justify-center lg:justify-start gap-4 px-4 py-3 text-[#64748b] hover:bg-[#f8fafc] hover:text-[#0f172a] rounded-xl font-medium transition-colors">
+            <a href="/halaman_recent/{{ auth()->id() }}" class="flex items-center justify-center lg:justify-start gap-4 px-4 py-3 text-[#64748b] hover:bg-[#f8fafc] hover:text-[#0f172a] rounded-xl font-medium transition-colors">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>

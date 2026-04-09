@@ -43,55 +43,56 @@ class Beranda extends Controller
         return view('beranda', compact('user', 'folders', 'files'));
     }
 
-    public function upload(Request $request)
-    {
-        $request->validate([
-            'upload' => 'required|file|mimetypes:image/jpeg,image/png,image/jpg,application/pdf,video/mp4|max:2048',
-            'folder_id' => 'nullable|exists:folders,id'
-        ]);
-
-        if ($request->hasFile('upload')) {
-            $file = $request->file('upload');
-            $fileSize = $file->getSize();
-            $user = auth()->user();
-
-            // Check if user has enough storage
-            if (($user->storage_used + $fileSize) > $user->storage_quota) {
-                return back()->with('error', 'Penyimpanan Anda penuh! Sisa ruang: ' . number_format(($user->storage_quota - $user->storage_used) / 1024 / 1024, 2) . ' MB');
-            }
-
-            $nama_file = $file->getClientOriginalName();
-            $folder_id = $request->input('folder_id');
-            $user_id = $user->id;
-
-            // Resolve path
-            $storage_path = 'data_user/' . $user_id;
-            if ($folder_id) {
-                $folder = Folder::findOrFail($folder_id);
-                $storage_path = $folder->path;
-            }
-
-            $path = Storage::putFileAs($storage_path, $file, $nama_file);
-
-            Gallery::create([
-                'user_id' => $user_id,
-                'folder_id' => $folder_id,
-                'file' => $nama_file,
-                'nama_tampilan' => $nama_file,
-                'ukuran' => $fileSize,
-                'izin' => 1,
-                'path' => $path
+        public function upload(Request $request)
+        {
+            $request->validate([
+                'upload' => 'required|file|mimetypes:image/jpeg,image/png,image/jpg,application/pdf,video/mp4|max:2048',
+                'folder_id' => 'nullable|exists:folders,id'
             ]);
 
-            // Update storage used
-            $user->increment('storage_used', $fileSize);
+            if ($request->hasFile('upload')) {
+                $file = $request->file('upload');
+                $fileSize = $file->getSize();
+                $user = auth()->user();
 
-            Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
+                // Check if user has enough storage
+                if (($user->storage_used + $fileSize) > $user->storage_quota) {
+                    return back()->with('error', 'Penyimpanan Anda penuh! Sisa ruang: ' . number_format(($user->storage_quota - $user->storage_used) / 1024 / 1024, 2) . ' MB');
+                }
 
-            return back()->with('nama_tampil', $nama_file);
+                $nama_file = $file->getClientOriginalName();
+                $folder_id = $request->input('folder_id');
+                $user_id = $user->id;
+
+                // Resolve path
+                $storage_path = 'data_user/' . $user_id;
+                if ($folder_id) {
+                    $folder = Folder::findOrFail($folder_id);
+                    $storage_path = $folder->path;
+                }
+
+                $path = Storage::putFileAs($storage_path, $file, $nama_file);
+
+                Gallery::create([
+                    'user_id' => $user_id,
+                    'folder_id' => $folder_id,
+                    'file' => $nama_file,
+                    'nama_tampilan' => $nama_file,
+                    'ukuran' => $fileSize,
+                    'izin' => 1,
+                    'path' => $path,
+                    'riwayat' => now()
+                ]);
+
+                // Update storage used
+                $user->increment('storage_used', $fileSize);
+
+                Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
+
+                return back()->with('nama_tampil', $nama_file);
+            }
+            return back()->with('error', 'Gagal upload file');
         }
-        return back()->with('error', 'Gagal upload file');
-    }
 
     public function hapus_file($id)
     {
@@ -396,5 +397,12 @@ class Beranda extends Controller
     {
         $file_sampah = Gallery::onlyTrashed()->get();
         return view('sampah',compact('file_sampah'));
+    }
+
+    public function recent($id)
+    {
+        $file = Gallery::where("user_id",auth()->id())->latest("riwayat")->get();
+
+        return view('recent',compact('file'));
     }
 }

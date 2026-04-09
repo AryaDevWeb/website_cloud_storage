@@ -16,7 +16,8 @@ class Gallery extends Model
         'nama_tampilan',
         'ukuran',
         'path',
-        'riwayat'
+        'riwayat',
+  
     ];
     protected $casts = [
         'riwayat' => 'datetime'
