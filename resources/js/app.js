@@ -16,20 +16,16 @@ document.addEventListener('DOMContentLoaded', () => {
     initUserDropdown();
     initConfirmModal();
     initBottomSheet();
+    initViewToggle();
+    initContextMenu(handleAction);
+    initKebabMenus(handleAction);
+    initKeyboard();
+    initSearch();
+    initDragDrop();
+    initFileInput();
+    initRealtime();
 
-    // ── File views (only on pages that have the file explorer) ──
-    const hasExplorer = document.getElementById('grid-view') || document.getElementById('list-view');
-    if (hasExplorer) {
-        initViewToggle();
-        initContextMenu(handleAction);
-        initKebabMenus(handleAction);
-        initKeyboard();
-        initSearch();
-        initDragDrop();
-        initFileInput();
-        initRealtime();
-
-        // Sort dropdown
+     // Sort dropdown
         document.getElementById('sort-select')?.addEventListener('change', e => setSort(e.target.value));
         // Restore sort
         const saved = localStorage.getItem('fileSort');
@@ -46,5 +42,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Load initial files
         loadFiles();
+
+    // ── File views (only on pages that have the file explorer) ──
+    const hasExplorer = document.getElementById('grid-view') || document.getElementById('list-view');
+    if (hasExplorer) {
+    
+
+       
     }
 });

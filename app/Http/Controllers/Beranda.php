@@ -75,8 +75,10 @@ class Beranda extends Controller
         }
 
         $tempat_sementara = storage_path("app/temp/");
-        if (!file_exists($tempat_sementara)) mkdir($tempat_sementara, 0777, true);
-
+        
+        if (!Storage::exists($storage_path)) {
+            Storage::makeDirectory($storage_path);
+        }
         // 2. Logika Konversi
         if (in_array($tipe_file, ['docx', 'pptx', 'xlsx'])) {
             $file_nama_murni = pathinfo($nama_asli, PATHINFO_FILENAME);
@@ -105,6 +107,8 @@ class Beranda extends Controller
             $path = Storage::putFileAs($storage_path, $file, $nama_asli);
             $nama_tampilan = $nama_asli;
         }
+        
+
 
         // 3. Simpan ke Database
         Gallery::create([
@@ -118,10 +122,14 @@ class Beranda extends Controller
             'riwayat' => now()
         ]);
 
+    
+
         $user->increment('storage_used', $fileSize);
         Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
 
-        return back()->with('nama_tampil', $nama_tampilan);
+        return response()->json([
+            'file' => $nama_tampilan
+        ]);
     }
     return back()->with('error', 'Gagal upload file');
 }
