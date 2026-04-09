@@ -29,7 +29,7 @@ class Beranda extends Controller
         $totalMB = number_format($user->storage_quota / 1024 / 1024, 0);
         $percentage = ($user->storage_used / $user->storage_quota) * 100;
         $recentFiles = $user->galleries()->latest()->take(5)->get();
-        $file = Gallery::where("user_id",$id)->get();
+        $file = Gallery::where("user_id",$id)->whereNull("folder_id")->get();
 
         return view('dashboard', compact(
             'user', 'totalFiles', 'totalFolders', 'usedMB', 'remainingMB', 'totalMB', 'percentage', 'recentFiles','folder','file'
@@ -45,56 +45,86 @@ class Beranda extends Controller
         return view('beranda', compact('user', 'folders', 'files'));
     }
 
-        public function upload(Request $request)
-        {
-            $request->validate([
-                'upload' => 'required|file|mimetypes:image/jpeg,image/png,image/jpg,application/pdf,video/mp4|max:2048',
-                'folder_id' => 'nullable|exists:folders,id'
-            ]);
+   public function upload(Request $request)
+{
+    $request->validate([
+        'upload' => 'required|file|mimetypes:image/jpeg,image/png,image/jpg,application/pdf,video/mp4,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet|max:5120',
+        'folder_id' => 'nullable|exists:folders,id'
+    ]);
 
-            if ($request->hasFile('upload')) {
-                $file = $request->file('upload');
-                $fileSize = $file->getSize();
-                $user = auth()->user();
+    if ($request->hasFile('upload')) {
+        $file = $request->file('upload');
+        $fileSize = $file->getSize();
+        $user = auth()->user();
 
-                // Check if user has enough storage
-                if (($user->storage_used + $fileSize) > $user->storage_quota) {
-                    return back()->with('error', 'Penyimpanan Anda penuh! Sisa ruang: ' . number_format(($user->storage_quota - $user->storage_used) / 1024 / 1024, 2) . ' MB');
-                }
-
-                $nama_file = $file->getClientOriginalName();
-                $folder_id = $request->input('folder_id');
-                $user_id = $user->id;
-
-                // Resolve path
-                $storage_path = 'data_user/' . $user_id;
-                if ($folder_id) {
-                    $folder = Folder::findOrFail($folder_id);
-                    $storage_path = $folder->path;
-                }
-
-                $path = Storage::putFileAs($storage_path, $file, $nama_file);
-
-                Gallery::create([
-                    'user_id' => $user_id,
-                    'folder_id' => $folder_id,
-                    'file' => $nama_file,
-                    'nama_tampilan' => $nama_file,
-                    'ukuran' => $fileSize,
-                    'izin' => 1,
-                    'path' => $path,
-                    'riwayat' => now()
-                ]);
-
-                // Update storage used
-                $user->increment('storage_used', $fileSize);
-
-                Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
-
-                return back()->with('nama_tampil', $nama_file);
-            }
-            return back()->with('error', 'Gagal upload file');
+        // Check storage quota
+        if (($user->storage_used + $fileSize) > $user->storage_quota) {
+            return back()->with('error', 'Penyimpanan penuh!');
         }
+
+        $tipe_file = $file->getClientOriginalExtension();
+        $nama_asli = $file->getClientOriginalName();
+        $user_id = $user->id;
+        $folder_id = $request->input('folder_id');
+
+        // 1. Tentukan Base Storage Path
+        $storage_path = 'data_user/' . $user_id; // Hasil: data_user/2
+        if ($folder_id) {
+            $folder = Folder::findOrFail($folder_id);
+            $storage_path = $folder->path; 
+        }
+
+        $tempat_sementara = storage_path("app/temp/");
+        if (!file_exists($tempat_sementara)) mkdir($tempat_sementara, 0777, true);
+
+        // 2. Logika Konversi
+        if (in_array($tipe_file, ['docx', 'pptx', 'xlsx'])) {
+            $file_nama_murni = pathinfo($nama_asli, PATHINFO_FILENAME);
+            $tempFile = $file->move($tempat_sementara, $nama_asli);
+
+            // Perhatikan SPASI setelah --outdir
+            $command = "libreoffice --headless --convert-to pdf --outdir " . escapeshellarg($tempat_sementara) . " " . escapeshellarg($tempFile);
+            shell_exec($command);
+
+            $nama_file_baru = $file_nama_murni . '.pdf';
+            $path_pdf_hasil = $tempat_sementara . $nama_file_baru;
+
+            if (file_exists($path_pdf_hasil)) {
+                $path = Storage::putFileAs($storage_path, new \Illuminate\Http\File($path_pdf_hasil), $nama_file_baru);
+                $fileSize = filesize($path_pdf_hasil);
+                $nama_tampilan = $nama_file_baru;
+                
+                // Hapus file temp
+                unlink($tempFile);
+                unlink($path_pdf_hasil);
+            } else {
+                return back()->with('error', 'Gagal mengonversi file ke PDF.');
+            }
+        } else {
+            // Upload Biasa
+            $path = Storage::putFileAs($storage_path, $file, $nama_asli);
+            $nama_tampilan = $nama_asli;
+        }
+
+        // 3. Simpan ke Database
+        Gallery::create([
+            'user_id' => $user_id,
+            'folder_id' => $folder_id,
+            'file' => $nama_tampilan,
+            'nama_tampilan' => $nama_tampilan,
+            'ukuran' => $fileSize,
+            'izin' => 1,
+            'path' => $path,
+            'riwayat' => now()
+        ]);
+
+        $user->increment('storage_used', $fileSize);
+        Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
+
+        return back()->with('nama_tampil', $nama_tampilan);
+    }
+    return back()->with('error', 'Gagal upload file');
+}
 
     public function hapus_file($id)
     {
