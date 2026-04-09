@@ -38,9 +38,21 @@ export function initDragDrop() {
 // ── File input trigger ──────────────────────────────────────
 export function initFileInput() {
     const input = document.getElementById('file-input');
-    document.getElementById('upload-btn')?.addEventListener('click', () => input?.click());
-    document.getElementById('mobile-fab')?.addEventListener('click', () => input?.click());
-    input?.addEventListener('change', function () {
+    if (!input) return;
+
+    // Bind all elements that should trigger the file picker
+    ['upload-btn', 'mobile-fab'].forEach(id => {
+        document.getElementById(id)?.addEventListener('click', () => input.click());
+    });
+
+    // Any button/element with data-upload-trigger attr
+    document.querySelectorAll('[data-upload-trigger]').forEach(el => {
+        el.addEventListener('click', () => input.click());
+    });
+
+    // Dashboard content-area upload buttons call input?.click() directly — that works natively.
+    // But ensure the input's change event is always bound:
+    input.addEventListener('change', function () {
         if (this.files.length) processFiles(Array.from(this.files));
         this.value = '';
     });

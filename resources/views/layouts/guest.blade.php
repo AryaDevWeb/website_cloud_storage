@@ -15,7 +15,7 @@
         {{-- Brand --}}
         {{-- Logo --}}
         <div class="text-center mb-10">
-            <img src="{{ asset('images/CLD.png') }}" alt="CLD Logo" class="w-20 h-20 mx-auto object-contain">
+            <img src="{{ asset('images/CLD.png') }}" alt="CLD Logo" class="w-20 h-20 mx-auto object-contain" style="max-width: 80px; max-height: 80px;">
         </div>
 
         {{-- Card --}}

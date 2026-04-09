@@ -9,7 +9,7 @@
  * ╚═══════════════════════════════════════════════════════════╝
  */
 
-const USE_MOCKS = true;
+const USE_MOCKS = false;
 const CSRF = () => document.querySelector('meta[name="csrf-token"]')?.content || '';
 
 // ── Mock data ───────────────────────────────────────────────
@@ -145,7 +145,7 @@ export function uploadFile(file, folderId, { onProgress, onDone, onError }) {
 
     /* REAL: XHR for progress tracking */
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/upload');
+    xhr.open('POST', '/api/upload');
     xhr.setRequestHeader('X-CSRF-TOKEN', CSRF());
     xhr.upload.addEventListener('progress', e => {
         if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
@@ -249,7 +249,11 @@ export async function createFolder(name, parentId = null) {
     }
     const res = await fetch('/api/folder', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF() },
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': CSRF(),
+            'Accept': 'application/json'
+        },
         body: JSON.stringify({ name, parent_id: parentId }),
     });
     return res.json();

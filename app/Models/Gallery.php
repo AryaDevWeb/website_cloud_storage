@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Gallery extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'user_id',
         'folder_id',
@@ -14,30 +17,25 @@ class Gallery extends Model
         'nama_tampilan',
         'ukuran',
         'path',
-        'riwayat'
-    ];
-    protected $casts = [
-        'riwayat' => 'datetime'
+        'riwayat',
+        'starred',
+        'status',
+        'preview_type',
+        'preview_path',
     ];
 
+    protected $casts = [
+        'riwayat'  => 'datetime',
+        'starred'  => 'boolean',
+        'izin'     => 'integer',
+    ];
 
     public function getUkuranFormatAttribute()
     {
         $byte = $this->ukuran;
-
-        if ($byte <= 0) {
-            return '0 B';
-        }
-
+        if ($byte <= 0) return '0 B';
         $unit = ['B','KB','MB','GB'];
-
-        $i = floor(log($byte,1024));
-
-        $formatUkuran = round($byte/ pow(1024,$i),2);
-
-        return $formatUkuran . ' ' . $unit[$i];
-      
-
+        $i = floor(log($byte, 1024));
+        return round($byte / pow(1024, $i), 2) . ' ' . $unit[$i];
     }
-    //
 }

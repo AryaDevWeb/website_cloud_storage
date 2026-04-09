@@ -17,7 +17,7 @@
     {{-- SIDEBAR: SLEEK & FIXED --}}
     <aside class="fixed top-0 left-0 bottom-0 w-20 lg:w-64 bg-white border-r border-[#f1f5f9] z-50 flex flex-col transition-all">
         <div class="h-20 flex items-center px-6 lg:px-8 border-b border-[#f1f5f9]">
-            <img src="{{ asset('images/CLD.png') }}" alt="CLD Logo" class="w-10 h-10 object-contain">
+            <img src="{{ asset('images/CLD.png') }}" alt="CLD Logo" class="w-10 h-10 object-contain" style="max-width: 40px; max-height: 40px;">
             <span class="ml-3 text-lg font-bold tracking-tight text-[#0f172a] hidden lg:block">CLD Storage</span>
         </div>
 

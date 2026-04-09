@@ -6,8 +6,6 @@ use App\Http\Controllers\Login;
 use App\Http\Controllers\Beranda;
 
 
-
-
 Route::get('/login', function () {
     return view('login');
 })->name('login');
@@ -33,6 +31,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/logout', [Beranda::class, 'logout']);
     Route::get('/pencarian', [Beranda::class, 'pencarian']);
 
+    // ── New section pages ─────────────────────────────────────
+    Route::get('/recent', fn() => view('recent'))->name('recent');
+    Route::get('/starred', fn() => view('starred'))->name('starred');
+    Route::get('/shared', fn() => view('shared'))->name('shared');
+    Route::get('/trash', fn() => view('trash'))->name('trash');
+
     // Folders
     Route::post('/folder', [Beranda::class, 'folder']);
     Route::get('/folder_open/{id}', [Beranda::class, 'new_folder'])->name('folder.show');
@@ -50,6 +54,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/permissions_file/{id}', [Beranda::class, 'izin_file']);
     Route::post('/ubah_perizinan/{id}', [Beranda::class, 'ubah_izin']);
     Route::get('/open_file/{id}', [Beranda::class, 'open_file']);
+    Route::get('/open_file_img/{id}', [Beranda::class, 'streamFile']);
+    Route::get('/open_file_stream/{id}', [Beranda::class, 'streamFile']);
+
+
+    // ── JSON API endpoints ─────────────────────────────────────
+    Route::get('/api/files', [Beranda::class, 'getFilesJson']);
+    Route::get('/api/files/recent', [Beranda::class, 'recentFiles']);
+    Route::get('/api/files/starred', [Beranda::class, 'starredFiles']);
+    Route::get('/api/files/shared', [Beranda::class, 'sharedFiles']);
+    Route::get('/api/files/trash', [Beranda::class, 'trashedFiles']);
+    Route::get('/api/folders/tree', [Beranda::class, 'folderTree']);
+
+    Route::post('/api/upload', [Beranda::class, 'uploadAjax']);
+    Route::post('/api/folder', [Beranda::class, 'folderAjax']);
+
+    Route::patch('/api/file/{id}', [Beranda::class, 'renameAjax']);
+    Route::delete('/api/file/{id}', [Beranda::class, 'deleteAjax']);
+    Route::post('/api/file/{id}/share', [Beranda::class, 'shareAjax']);
+    Route::post('/api/file/{id}/star', [Beranda::class, 'starAjax']);
+    Route::post('/api/file/{id}/restore', [Beranda::class, 'restoreAjax']);
+    Route::delete('/api/file/{id}/permanent', [Beranda::class, 'forceDeleteAjax']);
+    Route::patch('/api/file/{id}/permission', [Beranda::class, 'permissionAjax']);
+    Route::post('/api/file/{id}/move', [Beranda::class, 'moveAjax']);
+
+    Route::get('/api/notifications', [Beranda::class, 'notificationsAjax']);
 
     // Account
     Route::get('/lihat_akun/{id}', [Beranda::class, 'lihat_akun']);
@@ -59,17 +88,3 @@ Route::middleware(['auth', 'verified'])->group(function () {
 Route::middleware(['auth', 'throttle:10,1'])->group(function () {
     Route::get('/download/{id}', [Beranda::class, 'download_file']);
 });
-
-Route::get('/modern-dashboard', function () {
-    return view('modern_dashboard');
-})->middleware(['auth']);
-
-Route::get('/cloud', function () {
-    return view('cloud');
-})->middleware(['auth']);
-
-
-
-
-
-?>

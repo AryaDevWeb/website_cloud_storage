@@ -65,15 +65,19 @@ function applySidebarState() {
     const colRight = document.getElementById('collapse-icon-right');
 
     if (sidebarCollapsed) {
-        sidebar.classList.replace('w-60', 'w-16');
-        main?.classList.replace('lg:ml-60', 'lg:ml-16');
+        sidebar.classList.remove('w-60');
+        sidebar.classList.add('w-16');
+        main?.classList.remove('lg:ml-60');
+        main?.classList.add('lg:ml-16');
         labels.forEach(l => l.classList.add('lg:hidden'));
         storageBlock?.classList.add('hidden');
         storageIcon?.classList.remove('hidden'); storageIcon?.classList.add('flex');
         colLeft?.classList.add('hidden'); colRight?.classList.remove('hidden');
     } else {
-        sidebar.classList.replace('w-16', 'w-60');
-        main?.classList.replace('lg:ml-16', 'lg:ml-60');
+        sidebar.classList.remove('w-16');
+        sidebar.classList.add('w-60');
+        main?.classList.remove('lg:ml-16');
+        main?.classList.add('lg:ml-60');
         labels.forEach(l => l.classList.remove('lg:hidden'));
         storageBlock?.classList.remove('hidden');
         storageIcon?.classList.add('hidden'); storageIcon?.classList.remove('flex');
