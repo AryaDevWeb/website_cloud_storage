@@ -27,7 +27,6 @@ document.addEventListener('DOMContentLoaded', () => {
         initKeyboard();
         initSearch();
         initDragDrop();
-        initFileInput();
         initRealtime();
 
         // Sort dropdown

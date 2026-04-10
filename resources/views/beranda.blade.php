@@ -36,10 +36,10 @@
     </div>
 
     {{-- Grid view (JS-rendered) --}}
-    <div id="grid-view" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" role="listbox" aria-label="Files and folders"></div>
+
 
     {{-- List view (JS-rendered) --}}
-    <div id="list-view" class="hidden">
+    <div class="hidden">
         <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <table class="w-full text-left text-sm" role="table">
                 <thead class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
@@ -57,8 +57,24 @@
         </div>
     </div>
 
+    {{-- melihat isi file dan folder user  --}}
+
+    @foreach ($file as $files )
+         <button>{{ $files->nama_tampilan }}</button>
+          <div  class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" role="listbox" aria-label="Files and folders"></div>
+         
+    
+    @endforeach
+
+    @foreach ($folders as $folder_user)
+        <button>{{ $folder_user->nama_folder }}</button>
+         <div  class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" role="listbox" aria-label="Files and folders"></div>
+    
+    @endforeach
+
     {{-- Empty state --}}
-    <div id="empty-state" class="hidden flex flex-col items-center justify-center py-24 bg-white border border-gray-200 rounded-xl text-center">
+    @if (empty($file) && empty($folder))
+         <div id="empty-state" class="hidden flex flex-col items-center justify-center py-24 bg-white border border-gray-200 rounded-xl text-center">
         <div class="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center mb-5">
             <svg class="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
         </div>
@@ -76,6 +92,9 @@
             </button>
         </div>
     </div>
+    
+    @endif
+   
 
     {{-- Pagination --}}
     <div id="pagination" class="flex justify-center mt-6"></div>

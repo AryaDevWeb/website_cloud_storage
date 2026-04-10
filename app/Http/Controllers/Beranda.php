@@ -39,10 +39,10 @@ class Beranda extends Controller
     public function akun($id)
     {
         $user = User::findOrFail($id);
-        $folders = $user->folders()->whereNull('parent_id')->get();
-        $files = $user->galleries()->whereNull('folder_id')->get();
+        $folders = Folder::where("user_id",$id)->whereNull('parent_id')->get();
+        $file = Gallery::where("user_id",$id)->whereNull('folder_id')->get();
 
-        return view('beranda', compact('user', 'folders', 'files'));
+        return view('beranda', compact('user', 'folders', 'file'));
     }
 
    public function upload(Request $request)
