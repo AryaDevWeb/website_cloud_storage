@@ -50,6 +50,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/permissions_file/{id}', [Beranda::class, 'izin_file']);
     Route::post('/ubah_perizinan/{id}', [Beranda::class, 'ubah_izin']);
     Route::get('/open_file/{id}', [Beranda::class, 'open_file']);
+    Route::get('/hapus_permanen/{id}',[Beranda::class, "hapus_permanen"]);
+    Route::get('/restore/{id}',[Beranda::class, "restore"]);
 
     Route::get('/halaman_recent/{id}', [Beranda::class, 'recent']);
 

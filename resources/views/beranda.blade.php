@@ -59,8 +59,22 @@
 
     {{-- melihat isi file dan folder user  --}}
 
+    @if (session("status_file"))
+        <p>{{session("status_file") }}</p>
+    
+    @endif
+
     @foreach ($file as $files )
          <button>{{ $files->nama_tampilan }}</button>
+         <p>{{ $files->path }}</p>
+
+         <form action="/hapus_file/{{ $files->id }}">
+            <button>Delete</button>
+
+         </form>
+         
+         <button>Rename</button>
+         
           <div  class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" role="listbox" aria-label="Files and folders"></div>
          
     

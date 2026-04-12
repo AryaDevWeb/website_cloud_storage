@@ -20,7 +20,7 @@ class Beranda extends Controller
 {
     public function dashboard($id)
     {
-        $user = User::findOrFail($id);
+        $user = auth()->user();
         $folder = Folder::where("user_id",$id)->whereNull("parent_id")->get();
         $totalFiles = $user->galleries()->count();
         $totalFolders = $user->folders()->count();
@@ -29,7 +29,11 @@ class Beranda extends Controller
         $totalMB = number_format($user->storage_quota / 1024 / 1024, 0);
         $percentage = ($user->storage_used / $user->storage_quota) * 100;
         $recentFiles = $user->galleries()->latest()->take(5)->get();
-        $file = Gallery::where("user_id",$id)->whereNull("folder_id")->get();
+        $file = Gallery::where("user_id",$id)
+    ->whereNull('folder_id')
+    ->whereNotNull('nama_tampilan')
+    ->where('nama_tampilan', '!=', '')
+    ->get();
 
         return view('dashboard', compact(
             'user', 'totalFiles', 'totalFolders', 'usedMB', 'remainingMB', 'totalMB', 'percentage', 'recentFiles','folder','file'
@@ -40,7 +44,11 @@ class Beranda extends Controller
     {
         $user = User::findOrFail($id);
         $folders = Folder::where("user_id",$id)->whereNull('parent_id')->get();
-        $file = Gallery::where("user_id",$id)->whereNull('folder_id')->get();
+        $file = Gallery::where("user_id",$id)
+    ->whereNull('folder_id')
+    ->whereNotNull('nama_tampilan')
+    ->where('nama_tampilan', '!=', '')
+    ->get();
 
         return view('beranda', compact('user', 'folders', 'file'));
     }
@@ -134,19 +142,41 @@ class Beranda extends Controller
 
     public function hapus_file($id)
     {
-        $file = Gallery::findOrFail($id);
+        $file = Gallery::withTrashed()->findOrFail($id);
+
+        $fileSize = $file->ukuran;
+        $user = auth()->user();
+        $file->delete();
+
+        // Update storage used
+
+        return back()->with('status_file', 'File berhasil dihapus');
+    }
+
+
+    public function hapus_permanen($id)
+    {
+        $file = Gallery::withTrashed()->findOrFail($id);
         $fileSize = $file->ukuran;
         $user = auth()->user();
 
         if (Storage::exists($file->path)) {
-            Storage::delete($file->path);
+            Storage::delete(paths: $file->path);
         }
-        $file->delete();
-
-        // Update storage used
         $user->decrement('storage_used', $fileSize);
 
-        return back()->with('status_file', 'File berhasil dihapus');
+        $file->forceDelete();
+
+        return back()->with("status","file berhasil dihapus secara permanen");
+    }
+
+    public function restore($id)
+    {
+        $file = Gallery::withTrashed()->findOrFail($id);
+
+        $file->restore();
+
+        return back()->with("status","file berhasil direstore");
     }
 
     public function folder(Request $request)
@@ -433,7 +463,7 @@ class Beranda extends Controller
 
     public function pindah_sampah()
     {
-        $file_sampah = Gallery::onlyTrashed()->get();
+        $file_sampah = Gallery::onlyTrashed()->where("user_id",auth()->id())->get();
         return view('sampah',compact('file_sampah'));
     }
 
