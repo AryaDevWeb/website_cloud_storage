@@ -13,7 +13,7 @@ return new class extends Migration
         });
 
         Schema::table('folders', function (Blueprint $table) {
-            $table->softDeletes();
+          
         });
     }
 
@@ -23,7 +23,7 @@ return new class extends Migration
             $table->dropColumn('starred');
         });
         Schema::table('folders', function (Blueprint $table) {
-            $table->dropSoftDeletes();
+         
         });
     }
 };
