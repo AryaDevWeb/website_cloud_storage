@@ -15,6 +15,10 @@ Route::post('/masuk', [Login::class, 'login']);
 Route::get('/register', [Register::class, 'tampil']);
 Route::post('/register', [Register::class, 'register']);
 
+// Google OAuth Routes
+Route::get('/auth/google', [App\Http\Controllers\OAuthController::class, 'redirectToGoogle']);
+Route::get('/auth/google/callback', [App\Http\Controllers\OAuthController::class, 'handleGoogleCallback']);
+
 Route::get('/', function () {
     if (auth()->check()) {
         return redirect('/dashboard/' . auth()->id());

@@ -61,6 +61,16 @@ function renderGridItem(item) {
     const sharedBadge = item.izin === 1
         ? `<span class="absolute top-2 right-8 z-10 w-1.5 h-1.5 bg-green-400 rounded-full" title="Public"></span>` : '';
 
+    let content = `<span class="${c.text}">${ICONS_SVG_LG[iconType] || ICONS_SVG_LG.generic}</span>`;
+    if (item.thumbnail_url) {
+        content = `<img src="${item.thumbnail_url}" alt="${item.name}" class="w-full h-full object-cover rounded-xl shadow-sm">`;
+    } else if (item.conversion_status === 'processing' || item.conversion_status === 'pending') {
+        content = `<div class="flex flex-col items-center gap-1.5">
+            <svg class="animate-spin h-5 w-5 ${c.text}" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+            <span class="text-[9px] font-bold ${c.text} opacity-80 uppercase tracking-tighter">Processing</span>
+        </div>`;
+    }
+
     return `
     <div data-item-id="${item.id}" data-item-type="${item.type}" data-item-name="${item.name}"
          data-item-starred="${item.starred||false}" data-item-izin="${item.izin||0}"
@@ -73,8 +83,8 @@ function renderGridItem(item) {
         <button data-kebab class="absolute top-3 right-3 p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity z-10" aria-label="Actions">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg>
         </button>
-        <div class="w-full h-20 ${c.bg} rounded-xl flex items-center justify-center mb-3">
-            <span class="${c.text}">${ICONS_SVG_LG[iconType] || ICONS_SVG_LG.generic}</span>
+        <div class="w-full h-20 ${item.thumbnail_url ? '' : c.bg} rounded-xl flex items-center justify-center mb-3 overflow-hidden">
+            ${content}
         </div>
         <p class="text-sm font-medium text-gray-800 truncate leading-tight">${item.name}</p>
         <div class="flex items-center justify-between mt-1.5">
@@ -101,7 +111,11 @@ function renderListRow(item) {
         </td>
         <td class="px-4 py-3">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 ${c.bg} rounded-lg flex items-center justify-center shrink-0"><span class="${c.text}">${ICONS_SVG[iconType]||ICONS_SVG.generic}</span></div>
+                <div class="w-8 h-8 ${item.thumbnail_url ? '' : c.bg} rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+                    ${item.thumbnail_url 
+                        ? `<img src="${item.thumbnail_url}" alt="" class="w-full h-full object-cover">` 
+                        : `<span class="${c.text}">${ICONS_SVG[iconType]||ICONS_SVG.generic}</span>`}
+                </div>
                 <div class="min-w-0">
                     <span class="text-sm font-medium text-gray-800 truncate max-w-[180px] block">${item.name}</span>
                     ${item.izin===1 ? '<span class="text-xs text-green-600 font-medium">Public</span>' : ''}

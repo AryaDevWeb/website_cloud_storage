@@ -14,20 +14,37 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Pastikan tidak ada orphan records
-        \DB::statement('
-            UPDATE folders 
-            SET parent_id = NULL 
-            WHERE parent_id IS NOT NULL 
-            AND parent_id NOT IN (SELECT id FROM folders WHERE deleted_at IS NULL)
-        ');
+        // Cek apakah constraint sudah ada
+        $constraintExists = \DB::select("
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE constraint_name = 'folders_parent_id_foreign' 
+            AND table_name = 'folders'
+        ");
 
-        Schema::table('folders', function (Blueprint $table) {
-            $table->foreignId('parent_id')
-                  ->nullable()
-                  ->constrained('folders')
-                  ->onDelete('set null');
-        });
+        if (empty($constraintExists)) {
+            // Cek apakah kolom parent_id sudah ada
+            $columnExists = \DB::getSchemaBuilder()->hasColumn('folders', 'parent_id');
+            
+            if (!$columnExists) {
+                // Kolom belum ada, tambahkan kolom + foreign key
+                Schema::table('folders', function (Blueprint $table) {
+                    $table->foreignId('parent_id')
+                          ->nullable()
+                          ->constrained('folders')
+                          ->onDelete('set null');
+                });
+            } else {
+                // Kolom sudah ada, hanya tambahkan foreign key constraint saja
+                \DB::statement('
+                    ALTER TABLE folders 
+                    ADD CONSTRAINT folders_parent_id_foreign 
+                    FOREIGN KEY (parent_id) 
+                    REFERENCES folders(id) 
+                    ON DELETE SET NULL
+                ');
+            }
+        }
+        // Jika constraint sudah ada, tidak perlu melakukan apa-apa
     }
 
     /**

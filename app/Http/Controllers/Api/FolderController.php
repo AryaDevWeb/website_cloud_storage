@@ -58,24 +58,12 @@ class FolderController extends Controller
             ], 422);
         }
 
-        $parentPath = 'data_user/' . $user->id;
-        if ($parentId) {
-            $parent     = $user->folders()->findOrFail($parentId);
-            $parentPath = $parent->path;
-        }
-
-        $folderPath = $parentPath . '/' . $request->name;
-
-        if (! Storage::exists($folderPath)) {
-            Storage::makeDirectory($folderPath);
-        }
-
         $folder = Folder::create([
             'nama_folder' => $request->name,
             'user_id'     => $user->id,
             'parent_id'   => $parentId,
             'permission'  => 1,
-            'path'        => $folderPath,
+            'path'        => '', // Path is no longer physically used
         ]);
 
         Wallet::firstOrCreate(['user_id' => $user->id], ['koin' => 0])->increment('koin', 10);
@@ -127,15 +115,7 @@ class FolderController extends Controller
     {
         $request->validate(['name' => 'required|string|max:255']);
         $folder  = $request->user()->folders()->findOrFail($id);
-        $oldPath = $folder->path;
-        $newPath = dirname($oldPath) . '/' . $request->name;
-
-        if (Storage::exists($oldPath)) {
-            Storage::move($oldPath, $newPath);
-        }
-
-        $folder->update(['nama_folder' => $request->name, 'path' => $newPath]);
-        $this->updateDescendantPaths($folder, $oldPath, $newPath);
+        $folder->update(['nama_folder' => $request->name]);
 
         return response()->json([
             'success' => true,
@@ -265,27 +245,18 @@ class FolderController extends Controller
     private function permanentDeleteFolder(Folder $folder, $user): void
     {
         foreach ($folder->files()->withTrashed()->get() as $file) {
-            if (Storage::exists($file->path)) Storage::delete($file->path);
+            if (Storage::disk('local')->exists($file->path)) Storage::disk('local')->delete($file->path);
+            if ($file->preview_path && Storage::disk('local')->exists($file->preview_path)) Storage::disk('local')->delete($file->preview_path);
+            if ($file->thumbnail_path && Storage::disk('public')->exists($file->thumbnail_path)) Storage::disk('public')->delete($file->thumbnail_path);
+
             $user->decrement('storage_used', $file->ukuran);
             $file->forceDelete();
         }
         foreach ($folder->children()->withTrashed()->get() as $sub) {
             $this->permanentDeleteFolder($sub, $user);
         }
-        if (Storage::exists($folder->path)) Storage::deleteDirectory($folder->path);
         $folder->forceDelete();
     }
 
-    private function updateDescendantPaths(Folder $folder, string $oldBase, string $newBase): void
-    {
-        foreach ($folder->children as $child) {
-            $newChildPath = str_replace($oldBase, $newBase, $child->path);
-            $child->update(['path' => $newChildPath]);
-            foreach ($child->files as $file) {
-                $newFilePath = str_replace($oldBase, $newBase, $file->path);
-                $file->update(['path' => $newFilePath]);
-            }
-            $this->updateDescendantPaths($child, $oldBase, $newBase);
-        }
-    }
+
 }

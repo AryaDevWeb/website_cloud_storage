@@ -22,6 +22,11 @@ class Gallery extends Model
         'status',
         'preview_type',
         'preview_path',
+        'mime_type',
+        'extension',
+        'thumbnail_path',
+        'conversion_status',
+        'preview_ready_at',
     ];
 
     protected $casts = [

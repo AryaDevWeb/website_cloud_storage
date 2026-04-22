@@ -14,22 +14,27 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Pertama, pastikan tidak ada orphan records (folder_id yang tidak ada di folders)
-        // Kita set NULL untuk record yang orphan
-        \DB::statement('
-            UPDATE galleries 
-            SET folder_id = NULL 
-            WHERE folder_id IS NOT NULL 
-            AND folder_id NOT IN (SELECT id FROM folders WHERE deleted_at IS NULL)
-        ');
-
-        // Tambahkan foreign key dengan cascadeOnDelete
-        Schema::table('galleries', function (Blueprint $table) {
-            $table->foreignId('folder_id')
-                  ->nullable()
-                  ->constrained('folders')
-                  ->onDelete('cascade');
-        });
+        // Cek apakah kolom folder_id sudah ada
+        $columnExists = \DB::getSchemaBuilder()->hasColumn('galleries', 'folder_id');
+        
+        if (!$columnExists) {
+            // Kolom belum ada, tambahkan kolom + foreign key
+            Schema::table('galleries', function (Blueprint $table) {
+                $table->foreignId('folder_id')
+                      ->nullable()
+                      ->constrained('folders')
+                      ->onDelete('cascade');
+            });
+        } else {
+            // Kolom sudah ada, tambahkan foreign key constraint saja dengan raw SQL
+            \DB::statement('
+                ALTER TABLE galleries 
+                ADD CONSTRAINT galleries_folder_id_foreign 
+                FOREIGN KEY (folder_id) 
+                REFERENCES folders(id) 
+                ON DELETE CASCADE
+            ');
+        }
     }
 
     /**

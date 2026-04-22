@@ -89,7 +89,7 @@ class Beranda extends Controller
         public function upload(Request $request)
         {
             $request->validate([
-                'upload' => 'required|file|mimes:jpg,jpeg,png,gif,svg,webp,pdf,mp4,webm,mov,avi,mp3,wav,ogg,flac,txt,md,json,js,php,py,css,html,doc,docx,xls,xlsx,ppt,pptx|max:2048',
+                'upload' => 'required|file|mimes:jpg,jpeg,png,gif,svg,webp,pdf,mp4,webm,mov,avi,mp3,wav,ogg,flac,txt,md,json,doc,docx,xls,xlsx,ppt,pptx|max:102400',
                 'folder_id' => ['nullable', Rule::exists('folders', 'id')->where('user_id', auth()->id())],
             ]);
 
@@ -110,29 +110,41 @@ class Beranda extends Controller
                 $folder_id = $request->input('folder_id');
                 $user_id = $user->id;
 
-                // Resolve path - gunakan path dari folder jika ada
-                $storage_path = 'data_user/' . $user_id;
-                if ($folder_id) {
-                    $folder = $user->folders()->findOrFail($folder_id);
-                    $storage_path = $folder->path;
-                }
+                $mime_type = $file->getMimeType();
+                $extension = $file->getClientOriginalExtension() ?: $file->extension();
 
-                // Simpan file dengan nama UUID
-                Storage::putFileAs($storage_path, $file, $safeName);
+                $storage_path = "users/{$user_id}/original";
+
+                // Simpan file dengan nama UUID ke local storage
+                Storage::disk('local')->putFileAs($storage_path, $file, $safeName);
                 
                 // Build full path untuk database
                 $fullPath = $storage_path . '/' . $safeName;
 
-                Gallery::create([
+                $preview_type = $this->mapPreviewType($extension);
+                
+                // Determine initial conversion status
+                $needsConversion = in_array($preview_type, ['image', 'video', 'office']);
+                $conversion_status = $needsConversion ? 'pending' : 'done';
+
+                $gallery = Gallery::create([
                     'user_id' => $user_id,
                     'folder_id' => $folder_id,
-                    'file' => $safeName,           // UUID untuk storage
-                    'nama_tampilan' => $displayName, // Nama asli untuk display
+                    'file' => $safeName,
+                    'nama_tampilan' => $displayName,
                     'ukuran' => $fileSize,
                     'izin' => 1,
-                    'path' => $fullPath,           // Path lengkap di database
+                    'path' => $fullPath,
+                    'mime_type' => $mime_type,
+                    'extension' => $extension,
+                    'preview_type' => $preview_type,
+                    'conversion_status' => $conversion_status,
                     'riwayat' => now()
                 ]);
+
+                if ($needsConversion) {
+                    \App\Jobs\ProcessFilePreview::dispatch($gallery->id);
+                }
 
                 // Update storage used
                 $user->increment('storage_used', $fileSize);
@@ -173,24 +185,12 @@ class Beranda extends Controller
         $nama_folder = $request->nama; // Allow spaces
         $parent_id = $request->parent_id;
 
-        $parent_path = 'data_user/' . $user_id;
-        if ($parent_id) {
-            $parent = $user->folders()->findOrFail($parent_id);
-            $parent_path = $parent->path;
-        }
-
-        $folder_path = $parent_path . '/' . $nama_folder;
-
-        if (!Storage::exists($folder_path)) {
-            Storage::makeDirectory($folder_path);
-        }
-
         Folder::create([
             'nama_folder' => $nama_folder,
             'user_id' => $user_id,
             'parent_id' => $parent_id,
             'permission' => 1,
-            'path' => $folder_path
+            'path' => '' // Path is no longer physically used
         ]);
 
         Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
@@ -299,9 +299,14 @@ class Beranda extends Controller
         $user = User::findOrFail($id);
         if ($user->id != auth()->id()) abort(403);
 
-        $path = 'data_user/' . $user->id;
-        if (Storage::exists($path)) {
-            Storage::deleteDirectory($path);
+        $path = 'users/' . $user->id;
+        if (Storage::disk('local')->exists($path)) {
+            Storage::disk('local')->deleteDirectory($path);
+        }
+        
+        // Also clean thumbnails
+        if (Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->deleteDirectory($path);
         }
 
         Auth::logout();
@@ -331,7 +336,7 @@ class Beranda extends Controller
             ->findOrFail($id);
         
         // Gunakan path dari database, jangan reconstruct
-        return Storage::download($file->path, $file->nama_tampilan);
+        return Storage::disk('local')->download($file->path, $file->nama_tampilan);
     }
 
     public function pindah($id)
@@ -401,7 +406,7 @@ class Beranda extends Controller
             'extension' => $extension,
             'waktu' => $waktu,
             'preview_type' => $file->preview_type,
-            'status' => $file->status ?? 'ready',
+            'conversion_status' => $file->conversion_status ?? 'done',
         ]);
     }
 
@@ -519,24 +524,12 @@ class Beranda extends Controller
             return response()->json(['message' => 'Folder already exists'], 422);
         }
 
-        $parent_path = 'data_user/' . $user_id;
-        if ($parent_id) {
-            $parent = $user->folders()->findOrFail($parent_id);
-            $parent_path = $parent->path;
-        }
-
-        $folder_path = $parent_path . '/' . $nama_folder;
-
-        if (!Storage::exists($folder_path)) {
-            Storage::makeDirectory($folder_path);
-        }
-
         $folder = Folder::create([
             'nama_folder' => $nama_folder,
             'user_id' => $user_id,
             'parent_id' => $parent_id,
             'permission' => 1,
-            'path' => $folder_path
+            'path' => '' // Path is no longer physically used
         ]);
 
         Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
@@ -556,7 +549,7 @@ class Beranda extends Controller
         try {
             // SECURITY: Validasi yang lebih ketat dengan allowlist
             $request->validate([
-                'file' => 'required|file|mimes:jpg,jpeg,png,gif,svg,webp,pdf,mp4,webm,mov,avi,mp3,wav,ogg,flac,txt,md,json,js,php,py,css,html,doc,docx,xls,xlsx,ppt,pptx|max:10240',
+                'file' => 'required|file|mimes:jpg,jpeg,png,gif,svg,webp,pdf,mp4,webm,mov,avi,mp3,wav,ogg,flac,txt,md,json,doc,docx,xls,xlsx,ppt,pptx|max:102400',
                 'folder_id' => 'nullable'
             ]);
 
@@ -579,28 +572,41 @@ class Beranda extends Controller
 
             $user_id = $user->id;
 
-            // Resolve path
-            $storage_path = 'data_user/' . $user_id;
-            if ($folder_id) {
-                $folder = $user->folders()->findOrFail($folder_id);
-                $storage_path = $folder->path;
-            }
+            $mime_type = $file->getMimeType();
+            $extension = $file->getClientOriginalExtension() ?: $file->extension();
 
-            // Simpan dengan nama UUID
-            Storage::putFileAs($storage_path, $file, $safeName);
+            $storage_path = "users/{$user_id}/original";
+
+            // Simpan dengan nama UUID ke local storage
+            Storage::disk('local')->putFileAs($storage_path, $file, $safeName);
             
             // Build full path untuk database
             $fullPath = $storage_path . '/' . $safeName;
 
+            $preview_type = $this->mapPreviewType($extension);
+            
+            // Determine initial conversion status
+            $needsConversion = in_array($preview_type, ['image', 'video', 'office']);
+            $conversion_status = $needsConversion ? 'pending' : 'done';
+
             $gallery = Gallery::create([
                 'user_id' => $user_id,
                 'folder_id' => $folder_id,
-                'file' => $safeName,           // UUID untuk storage
-                'nama_tampilan' => $displayName, // Nama asli untuk display
+                'file' => $safeName,
+                'nama_tampilan' => $displayName,
                 'ukuran' => $fileSize,
                 'izin' => 1,
-                'path' => $fullPath            // Path lengkap di database
+                'path' => $fullPath,
+                'mime_type' => $mime_type,
+                'extension' => $extension,
+                'preview_type' => $preview_type,
+                'conversion_status' => $conversion_status,
+                'riwayat' => now()
             ]);
+
+            if ($needsConversion) {
+                \App\Jobs\ProcessFilePreview::dispatch($gallery->id);
+            }
 
             $user->increment('storage_used', $fileSize);
             Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
@@ -635,18 +641,9 @@ class Beranda extends Controller
         if ($isFolder) {
             $folder = $user->folders()->findOrFail($realId);
 
-            // ── HANDLE PHYSICAL RENAME FOR FOLDERS ──────────────────
-            $oldPath = $folder->path;
-            $newPath = dirname($oldPath) . '/' . $request->name;
+            $folder->update(['nama_folder' => $request->name]);
 
-            if (Storage::exists($oldPath)) {
-                Storage::move($oldPath, $newPath);
-            }
-
-            $folder->update(['nama_folder' => $request->name, 'path' => $newPath]);
-
-            // ── RECURSIVELY UPDATE DESCENDANT PATHS ───────────
-            $this->updateDescendantPaths($folder, $oldPath, $newPath);
+            // Descendant physical paths update is no longer needed since folders are logical.
 
             return response()->json([
                 'id' => 'f' . $folder->id,
@@ -755,9 +752,10 @@ class Beranda extends Controller
             'starred'  => (bool)$f->starred,
             'izin'     => (int)$f->izin,
             'trashed'  => (bool)$f->deleted_at,
-            'status'   => $f->status ?? 'ready',
+            'conversion_status' => $f->conversion_status ?? 'done',
             'preview_type' => $f->preview_type ?: $this->mapPreviewType($ext),
             'preview_path' => $f->preview_path,
+            'thumbnail_url' => $f->thumbnail_path ? Storage::disk('public')->url($f->thumbnail_path) : null,
         ];
     }
 
@@ -807,9 +805,13 @@ class Beranda extends Controller
             $folder = $user->folders()->withTrashed()->findOrFail($realId);
             // RECURSIVE PERMANENT DELETE
             $this->permanentDeleteFolder($folder, $user);
-        } else {
             $file = $user->galleries()->withTrashed()->findOrFail($realId);
-            if (Storage::exists($file->path)) Storage::delete($file->path);
+            if (Storage::disk('local')->exists($file->path)) Storage::disk('local')->delete($file->path);
+            
+            // Delete preview and thumbnail if they exist
+            if ($file->preview_path && Storage::disk('local')->exists($file->preview_path)) Storage::disk('local')->delete($file->preview_path);
+            if ($file->thumbnail_path && Storage::disk('public')->exists($file->thumbnail_path)) Storage::disk('public')->delete($file->thumbnail_path);
+
             $user->decrement('storage_used', $file->ukuran);
             $file->forceDelete();
         }
@@ -819,7 +821,10 @@ class Beranda extends Controller
     private function permanentDeleteFolder($folder, $user)
     {
         foreach ($folder->files()->withTrashed()->get() as $file) {
-            if (Storage::exists($file->path)) Storage::delete($file->path);
+            if (Storage::disk('local')->exists($file->path)) Storage::disk('local')->delete($file->path);
+            if ($file->preview_path && Storage::disk('local')->exists($file->preview_path)) Storage::disk('local')->delete($file->preview_path);
+            if ($file->thumbnail_path && Storage::disk('public')->exists($file->thumbnail_path)) Storage::disk('public')->delete($file->thumbnail_path);
+
             $user->decrement('storage_used', $file->ukuran);
             $file->forceDelete();
         }
@@ -876,27 +881,11 @@ class Beranda extends Controller
                 }
             }
 
-            $oldPath = $folderToMove->path;
-            $newParentPath = $newFolderId ? $user->folders()->findOrFail($newFolderId)->path : 'data_user/' . $user->id;
-            $newPath = $newParentPath . '/' . $folderToMove->nama_folder;
-
-            if (Storage::exists($oldPath)) {
-                Storage::move($oldPath, $newPath);
-            }
-
-            $folderToMove->update(['parent_id' => $newFolderId, 'path' => $newPath]);
-            $this->updateDescendantPaths($folderToMove, $oldPath, $newPath);
+            $folderToMove->update(['parent_id' => $newFolderId]);
 
         } else {
             $file = $user->galleries()->findOrFail($realId);
-            $newParentPath = $newFolderId ? $user->folders()->findOrFail($newFolderId)->path : 'data_user/' . $user->id;
-            $newPath = $newParentPath . '/' . $file->file;
-
-            if (Storage::exists($file->path)) {
-                Storage::move($file->path, $newPath);
-            }
-
-            $file->update(['folder_id' => $newFolderId, 'path' => $newPath]);
+            $file->update(['folder_id' => $newFolderId]);
         }
 
         return response()->json(['success' => true]);
@@ -949,30 +938,12 @@ class Beranda extends Controller
             $path = $file->preview_path;
         }
 
-        if (!Storage::exists($path)) {
+        if (!Storage::disk('local')->exists($path)) {
             abort(404);
         }
 
-        return response()->file(Storage::path($path));
+        return Storage::disk('local')->response($path);
     }
-
-    private function updateDescendantPaths($folder, $oldPath, $newPath)
-    {
-        // Update direct files
-        foreach ($folder->files as $file) {
-            $fileRelativePath = str_replace($oldPath, $newPath, $file->path);
-            $file->update(['path' => $fileRelativePath]);
-        }
-
-        // Update child folders and recurse
-        foreach ($folder->children as $subfolder) {
-            $subfolderOldPath = $subfolder->path;
-            $subfolderNewPath = str_replace($oldPath, $newPath, $subfolderOldPath);
-            $subfolder->update(['path' => $subfolderNewPath]);
-            $this->updateDescendantPaths($subfolder, $subfolderOldPath, $subfolderNewPath);
-        }
-    }
-    
 
     public function pindah_sampah()
     {

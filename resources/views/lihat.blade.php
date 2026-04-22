@@ -43,15 +43,15 @@
             <span class="text-xs font-bold text-[#64748b] uppercase tracking-wider">File Preview</span>
             <div class="flex items-center gap-2">
                 <span class="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-600 rounded-md border border-blue-100 uppercase tracking-tighter">{{ $extension }}</span>
-                @if($status === 'ready')
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
+                @if($conversion_status === 'done')
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" title="Ready"></span>
                 @endif
             </div>
         </div>
 
         <div class="min-h-[400px] flex items-center justify-center bg-gray-50/50 p-4 sm:p-8 relative">
             
-            @if($status === 'processing')
+            @if($conversion_status === 'processing' || $conversion_status === 'pending')
                 {{-- ──────── PROCESSING STATE ──────── --}}
                 <div class="flex flex-col items-center gap-4 text-center py-12 animate-in fade-in duration-500">
                     <div class="relative w-16 h-16">
@@ -63,10 +63,13 @@
                     <div>
                         <p class="text-sm font-bold text-gray-900">Generating preview...</p>
                         <p class="text-xs text-gray-400 mt-1">We're optimizing your file for viewing.</p>
+                        <script>
+                            setTimeout(() => { window.location.reload(); }, 5000);
+                        </script>
                     </div>
                 </div>
 
-            @elseif($status === 'failed')
+            @elseif($conversion_status === 'failed')
                 {{-- ──────── FAILED STATE ──────── --}}
                 <div class="flex flex-col items-center gap-4 text-center py-12">
                     <div class="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 border border-red-100">
