@@ -7,13 +7,11 @@ use App\Http\Controllers\Beranda;
 
 
 Route::get('/login', function () {
+    if (auth()->check()) {
+        return redirect('/dashboard/' . auth()->id());
+    }
     return view('login');
 })->name('login');
-
-Route::post('/masuk', [Login::class, 'login']);
-
-Route::get('/register', [Register::class, 'tampil']);
-Route::post('/register', [Register::class, 'register']);
 
 // Google OAuth Routes
 Route::get('/auth/google', [App\Http\Controllers\OAuthController::class, 'redirectToGoogle']);

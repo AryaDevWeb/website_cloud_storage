@@ -51,8 +51,8 @@ class OAuthController extends Controller
                 }
             }
 
-            // Login the user
-            Auth::login($user);
+            // Login the user with "remember me" set to true
+            Auth::login($user, true);
 
             // Redirect to dashboard
             return redirect('/dashboard/' . $user->id)->with('status', 'Login dengan Google berhasil!');
