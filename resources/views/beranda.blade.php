@@ -16,7 +16,7 @@
             <select id="sort-select" class="appearance-none px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 cursor-pointer focus:outline-none focus:border-blue-600" aria-label="Sort by">
                 <option value="name">Name</option>
                 <option value="date">Date</option>
-                <option value="size">Size</option>
+                <optiWon value="size">Size</option>
             </select>
             <div class="flex items-center bg-gray-100 border border-gray-200 rounded-xl p-0.5" role="radiogroup" aria-label="View mode">
                 <button id="grid-btn" class="p-1.5 rounded-lg transition-colors bg-white shadow-sm text-blue-600" role="radio" aria-checked="true" aria-label="Grid">
