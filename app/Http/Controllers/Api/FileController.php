@@ -81,6 +81,10 @@ class FileController extends Controller
         $mime_type = $file->getMimeType();
         $extension = $file->getClientOriginalExtension() ?: $file->extension();
         
+        // SECURITY: Gunakan UUID untuk storage, nama asli untuk display
+        $safeName = \Illuminate\Support\Str::uuid()->toString() . '.' . $extension;
+        $displayName = basename($file->getClientOriginalName());
+
         $storagePath = "users/{$user->id}/original";
 
         // Simpan dengan nama UUID ke local storage
@@ -381,7 +385,7 @@ class FileController extends Controller
             'is_shared'    => $f->izin == 1,
             'conversion_status' => $f->conversion_status ?? 'done',
             'preview_type' => $f->preview_type ?: $this->mapPreviewType($ext),
-            'preview_path' => $f->preview_path,
+            'preview_url'  => $f->preview_path ? url("/open_file_stream/{$f->id}?source=preview") : url("/open_file_stream/{$f->id}"),
             'thumbnail_url' => $f->thumbnail_path ? Storage::disk('public')->url($f->thumbnail_path) : null,
             'created_at'   => $f->created_at?->toIso8601String(),
             'updated_at'   => $f->updated_at?->toIso8601String(),

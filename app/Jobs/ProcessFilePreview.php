@@ -62,6 +62,8 @@ class ProcessFilePreview implements ShouldQueue
                 $this->processVideo($gallery, $originalAbsolutePath, $user_id, $uuid);
             } elseif ($gallery->preview_type === 'office') {
                 $this->processOffice($gallery, $originalAbsolutePath, $user_id, $uuid);
+            } elseif ($gallery->preview_type === 'pdf') {
+                $this->processPdf($gallery, $originalAbsolutePath, $user_id, $uuid);
             } else {
                 // If it's a type that doesn't need external conversion but was queued somehow
                 $gallery->update([
@@ -169,5 +171,69 @@ class ProcessFilePreview implements ShouldQueue
             'conversion_status' => 'done',
             'preview_ready_at' => now(),
         ]);
+    }
+
+    private function processPdf(Gallery $gallery, string $originalAbsolutePath, $user_id, $uuid)
+    {
+        // Cross-platform binary detection
+        $popplerPath = env('POPPLER_PATH');
+        
+        if (!$popplerPath) {
+            if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                // Windows portable fallback
+                $popplerPath = base_path('bin' . DIRECTORY_SEPARATOR . 'poppler' . DIRECTORY_SEPARATOR . 'poppler-24.02.0' . DIRECTORY_SEPARATOR . 'Library' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'pdftocairo.exe');
+            } else {
+                // Linux system fallback
+                $popplerPath = 'pdftocairo';
+            }
+        }
+        
+        // Final check for binary existence if it's a relative/absolute path
+        if (str_contains($popplerPath, DIRECTORY_SEPARATOR) && !file_exists($popplerPath)) {
+            \Log::warning("Poppler binary not found at: " . $popplerPath);
+            $gallery->update([
+                'conversion_status' => 'done',
+                'preview_ready_at' => now(),
+            ]);
+            return;
+        }
+
+        // Thumbnail path to public disk
+        $thumbnailRelPath = "users/{$user_id}/thumbnails/{$uuid}.jpg";
+        $thumbnailAbsolutePrefix = Storage::disk('public')->path("users/{$user_id}/thumbnails/{$uuid}");
+        
+        // Ensure directory exists
+        Storage::disk('public')->makeDirectory("users/{$user_id}/thumbnails");
+
+        // Command: pdftocairo -jpeg -singlefile -f 1 -l 1 -scale-to 400 input.pdf output_prefix
+        $process = new Process([
+            $popplerPath,
+            '-jpeg',
+            '-singlefile',
+            '-f', '1',
+            '-l', '1',
+            '-scale-to', '400',
+            $originalAbsolutePath,
+            $thumbnailAbsolutePrefix
+        ]);
+        $process->setTimeout($this->timeout);
+        
+        try {
+            $process->run();
+
+            if (!$process->isSuccessful()) {
+                throw new ProcessFailedException($process);
+            }
+
+            $gallery->update([
+                'thumbnail_path' => $thumbnailRelPath,
+                'conversion_status' => 'done',
+                'preview_ready_at' => now(),
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("pdftocairo execution failed: " . $e->getMessage());
+            // Fallback: mark as done without thumbnail to avoid stuck processing
+            $gallery->update(['conversion_status' => 'done']);
+        }
     }
 }

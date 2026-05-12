@@ -175,8 +175,7 @@ export async function openPreview(fileId, name = '') {
     let url = fileObj.preview_path;
     if (!url) {
         if (pType === 'image') url = `/open_file_img/${fileId}`;
-        else if (pType === 'video' || pType === 'audio') url = `/open_file_stream/${fileId}`;
-        else url = `/open_file/${fileId}`;
+        else url = `/open_file_stream/${fileId}`;
     }
 
     // 4. Render Layouts based on resolved type

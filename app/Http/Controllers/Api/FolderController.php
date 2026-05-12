@@ -213,6 +213,7 @@ class FolderController extends Controller
             'name' => $f->nama_tampilan,
             'ext'  => $ext,
             'size' => (int) $f->ukuran,
+            'thumbnail_url' => $f->thumbnail_path ? Storage::disk('public')->url($f->thumbnail_path) : null,
         ];
     }
 

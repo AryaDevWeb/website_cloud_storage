@@ -387,7 +387,7 @@ class Beranda extends Controller
             ->findOrFail($id);
 
         // Gunakan path dari database, jangan reconstruct
-        $path = storage_path('app/' . $file->path);
+        $path = Storage::disk('local')->path($file->path);
         $waktu = is_null($file->riwayat) ? 'belum pernah dilihat' : $file->riwayat->diffForHumans();
 
         if (!file_exists($path)) {
@@ -754,7 +754,7 @@ class Beranda extends Controller
             'trashed'  => (bool)$f->deleted_at,
             'conversion_status' => $f->conversion_status ?? 'done',
             'preview_type' => $f->preview_type ?: $this->mapPreviewType($ext),
-            'preview_path' => $f->preview_path,
+            'preview_path' => $f->preview_path ? url("/open_file_stream/{$f->id}?source=preview") : null,
             'thumbnail_url' => $f->thumbnail_path ? Storage::disk('public')->url($f->thumbnail_path) : null,
         ];
     }
@@ -943,7 +943,13 @@ class Beranda extends Controller
             abort(404);
         }
 
-        return Storage::disk('local')->response($path);
+        $fullPath = Storage::disk('local')->path($path);
+        $mime = Storage::disk('local')->mimeType($path);
+
+        return response()->file($fullPath, [
+            'Content-Type' => $mime,
+            'Content-Disposition' => 'inline; filename="' . basename($path) . '"'
+        ]);
     }
 
     public function pindah_sampah()
