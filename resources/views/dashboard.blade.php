@@ -196,10 +196,14 @@
             @endphp
             <a href="/open_file/{{ $file->id }}"
                class="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
-                <div class="w-9 h-9 {{ $iconConfig['bg'] }} rounded-xl flex items-center justify-center shrink-0">
-                    <svg class="w-4 h-4 {{ $iconConfig['color'] }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                    </svg>
+                <div class="w-9 h-9 {{ $iconConfig['bg'] }} rounded-xl flex items-center justify-center shrink-0 overflow-hidden">
+                    @if($file->thumbnail_path && Storage::disk('public')->exists($file->thumbnail_path))
+                        <img src="{{ Storage::disk('public')->url($file->thumbnail_path) }}" alt="" class="w-full h-full object-cover">
+                    @else
+                        <svg class="w-4 h-4 {{ $iconConfig['color'] }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                        </svg>
+                    @endif
                 </div>
                 <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-gray-800 truncate group-hover:text-blue-600 transition-colors">
@@ -277,10 +281,14 @@
                 <tr class="hover:bg-blue-50/30 transition-colors group">
                     <td class="px-6 py-4">
                         <a href="/open_file/{{ $file->id }}" class="flex items-center gap-3">
-                            <div class="w-9 h-9 {{ $fileConfig['bg'] }} rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                                <svg class="w-4 h-4 {{ $fileConfig['color'] }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                                </svg>
+                            <div class="w-9 h-9 {{ $fileConfig['bg'] }} rounded-xl flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
+                                @if($file->thumbnail_path && Storage::disk('public')->exists($file->thumbnail_path))
+                                    <img src="{{ Storage::disk('public')->url($file->thumbnail_path) }}" alt="" class="w-full h-full object-cover">
+                                @else
+                                    <svg class="w-4 h-4 {{ $fileConfig['color'] }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                    </svg>
+                                @endif
                             </div>
                             <span class="font-medium text-gray-800 group-hover:text-blue-600 transition-colors truncate max-w-[180px]">
                                 {{ $file->nama_tampilan }}

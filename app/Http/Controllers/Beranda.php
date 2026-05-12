@@ -806,6 +806,7 @@ class Beranda extends Controller
             $folder = $user->folders()->withTrashed()->findOrFail($realId);
             // RECURSIVE PERMANENT DELETE
             $this->permanentDeleteFolder($folder, $user);
+        } else {
             $file = $user->galleries()->withTrashed()->findOrFail($realId);
             if (Storage::disk('local')->exists($file->path)) Storage::disk('local')->delete($file->path);
             
