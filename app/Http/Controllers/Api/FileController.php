@@ -61,7 +61,7 @@ class FileController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'file'      => 'required|file|max:102400', // 100 MB
+            'file'      => 'required|file|mimes:jpg,jpeg,png,gif,svg,webp,pdf,mp4,webm,mov,avi,mp3,wav,ogg,flac,txt,md,json,doc,docx,xls,xlsx,ppt,pptx|max:102400', // 100 MB
             'folder_id' => 'nullable|integer',
         ]);
 
@@ -77,26 +77,42 @@ class FileController extends Controller
         }
 
         $folderId    = $this->resolveId($request->input('folder_id'));
-        $namaFile    = ltrim($file->getClientOriginalName(), '/');
-        $storagePath = 'data_user/' . $user->id;
+        
+        $mime_type = $file->getMimeType();
+        $extension = $file->getClientOriginalExtension() ?: $file->extension();
+        
+        $storagePath = "users/{$user->id}/original";
 
-        if ($folderId) {
-            $folder = $user->folders()->findOrFail($folderId);
-            $storagePath = $folder->path;
-        }
+        // Simpan dengan nama UUID ke local storage
+        Storage::disk('local')->putFileAs($storagePath, $file, $safeName);
+        
+        // Build full path untuk database
+        $fullPath = $storagePath . '/' . $safeName;
 
-        $path = Storage::putFileAs($storagePath, $file, $namaFile);
+        $preview_type = $this->mapPreviewType($extension);
+        
+        // Determine initial conversion status
+        $needsConversion = in_array($preview_type, ['image', 'video', 'office']);
+        $conversion_status = $needsConversion ? 'pending' : 'done';
 
         $gallery = Gallery::create([
             'user_id'       => $user->id,
             'folder_id'     => $folderId,
-            'file'          => $namaFile,
-            'nama_tampilan' => $namaFile,
+            'file'          => $safeName,
+            'nama_tampilan' => $displayName,
             'ukuran'        => $fileSize,
             'izin'          => 1,
-            'path'          => $path,
+            'path'          => $fullPath,
+            'mime_type'     => $mime_type,
+            'extension'     => $extension,
+            'preview_type'  => $preview_type,
+            'conversion_status' => $conversion_status,
             'riwayat'       => now(),
         ]);
+
+        if ($needsConversion) {
+            \App\Jobs\ProcessFilePreview::dispatch($gallery->id);
+        }
 
         $user->increment('storage_used', $fileSize);
         Wallet::firstOrCreate(['user_id' => $user->id], ['koin' => 0])->increment('koin', 10);
@@ -163,14 +179,14 @@ class FileController extends Controller
     {
         $file = $request->user()->galleries()->findOrFail($id);
 
-        if (! Storage::exists($file->path)) {
+        if (! Storage::disk('local')->exists($file->path)) {
             return response()->json([
                 'success' => false,
                 'message' => 'File not found on storage.',
             ], 404);
         }
 
-        return Storage::download($file->path, $file->nama_tampilan);
+        return Storage::disk('local')->download($file->path, $file->nama_tampilan);
     }
 
     /**
@@ -252,9 +268,18 @@ class FileController extends Controller
         $user = $request->user();
         $file = $user->galleries()->withTrashed()->findOrFail($id);
 
-        if (Storage::exists($file->path)) {
-            Storage::delete($file->path);
+        if (Storage::disk('local')->exists($file->path)) {
+            Storage::disk('local')->delete($file->path);
         }
+
+        // Delete preview and thumbnail
+        if ($file->preview_path && Storage::disk('local')->exists($file->preview_path)) {
+            Storage::disk('local')->delete($file->preview_path);
+        }
+        if ($file->thumbnail_path && Storage::disk('public')->exists($file->thumbnail_path)) {
+            Storage::disk('public')->delete($file->thumbnail_path);
+        }
+
         $user->decrement('storage_used', $file->ukuran);
         $file->forceDelete();
 
@@ -349,13 +374,15 @@ class FileController extends Controller
             'name'         => $f->nama_tampilan,
             'original_name' => $f->file,
             'ext'          => $ext,
-            'mime_type'    => $this->mimeForExt($ext),
+            'mime_type'    => $f->mime_type ?? $this->mimeForExt($ext),
             'size'         => (int) $f->ukuran,
             'folder_id'    => $f->folder_id,
             'is_starred'   => (bool) $f->starred,
             'is_shared'    => $f->izin == 1,
-            'status'       => $f->status ?? 'ready',
+            'conversion_status' => $f->conversion_status ?? 'done',
             'preview_type' => $f->preview_type ?: $this->mapPreviewType($ext),
+            'preview_path' => $f->preview_path,
+            'thumbnail_url' => $f->thumbnail_path ? Storage::disk('public')->url($f->thumbnail_path) : null,
             'created_at'   => $f->created_at?->toIso8601String(),
             'updated_at'   => $f->updated_at?->toIso8601String(),
             'deleted_at'   => $f->deleted_at?->toIso8601String(),

@@ -13,20 +13,19 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
-        'password',
+        'google_id',
+        'avatar',
         'storage_used',
         'storage_quota',
     ];
 
     protected $hidden = [
-        'password',
         'remember_token',
     ];
 
     protected $casts = [
         'storage_used'    => 'integer',
         'storage_quota'   => 'integer',
-        'email_verified_at' => 'datetime',
     ];
 
     public function galleries()

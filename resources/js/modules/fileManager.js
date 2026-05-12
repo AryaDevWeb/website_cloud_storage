@@ -61,6 +61,16 @@ function renderGridItem(item) {
     const sharedBadge = item.izin === 1
         ? `<span class="absolute top-2 right-8 z-10 w-1.5 h-1.5 bg-green-400 rounded-full" title="Public"></span>` : '';
 
+    let content = `<span class="${c.text}">${ICONS_SVG_LG[iconType] || ICONS_SVG_LG.generic}</span>`;
+    if (item.thumbnail_url) {
+        content = `<img src="${item.thumbnail_url}" alt="${item.name}" class="w-full h-full object-cover rounded-xl shadow-sm">`;
+    } else if (item.conversion_status === 'processing' || item.conversion_status === 'pending') {
+        content = `<div class="flex flex-col items-center gap-1.5">
+            <svg class="animate-spin h-5 w-5 ${c.text}" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>
+            <span class="text-[9px] font-bold ${c.text} opacity-80 uppercase tracking-tighter">Processing</span>
+        </div>`;
+    }
+
     return `
     <div data-item-id="${item.id}" data-item-type="${item.type}" data-item-name="${item.name}"
          data-item-starred="${item.starred||false}" data-item-izin="${item.izin||0}"
@@ -73,8 +83,8 @@ function renderGridItem(item) {
         <button data-kebab class="absolute top-3 right-3 p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity z-10" aria-label="Actions">
             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg>
         </button>
-        <div class="w-full h-20 ${c.bg} rounded-xl flex items-center justify-center mb-3">
-            <span class="${c.text}">${ICONS_SVG_LG[iconType] || ICONS_SVG_LG.generic}</span>
+        <div class="w-full h-20 ${item.thumbnail_url ? '' : c.bg} rounded-xl flex items-center justify-center mb-3 overflow-hidden">
+            ${content}
         </div>
         <p class="text-sm font-medium text-gray-800 truncate leading-tight">${item.name}</p>
         <div class="flex items-center justify-between mt-1.5">
@@ -101,7 +111,11 @@ function renderListRow(item) {
         </td>
         <td class="px-4 py-3">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 ${c.bg} rounded-lg flex items-center justify-center shrink-0"><span class="${c.text}">${ICONS_SVG[iconType]||ICONS_SVG.generic}</span></div>
+                <div class="w-8 h-8 ${item.thumbnail_url ? '' : c.bg} rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+                    ${item.thumbnail_url 
+                        ? `<img src="${item.thumbnail_url}" alt="" class="w-full h-full object-cover">` 
+                        : `<span class="${c.text}">${ICONS_SVG[iconType]||ICONS_SVG.generic}</span>`}
+                </div>
                 <div class="min-w-0">
                     <span class="text-sm font-medium text-gray-800 truncate max-w-[180px] block">${item.name}</span>
                     ${item.izin===1 ? '<span class="text-xs text-green-600 font-medium">Public</span>' : ''}
@@ -143,7 +157,63 @@ function renderSelectionBar() {
     bar.querySelector('#sel-count').textContent = `${selectedIds.size} selected`;
 }
 
-// ── Load + render ──────────────────────────────────────────────
+// ── SMART UPDATE: Partial DOM update based on data diff ────────
+function smartUpdate(newItems) {
+    const gridEl   = document.getElementById('grid-view');
+    const listBody = document.getElementById('list-body');
+    const emptyEl  = document.getElementById('empty-state');
+    
+    const newIds = new Set(newItems.map(i => i.id));
+    const oldIds = new Set(items.map(i => i.id));
+    
+    // 1. Remove items no longer in server response
+    items.forEach(oldItem => {
+        if (!newIds.has(oldItem.id)) {
+            gridEl?.querySelector(`[data-item-id="${oldItem.id}"]`)?.remove();
+            listBody?.querySelector(`[data-item-id="${oldItem.id}"]`)?.remove();
+        }
+    });
+    
+    // 2. Update existing items (partial update)
+    newItems.forEach(newItem => {
+        const existingEl = gridEl?.querySelector(`[data-item-id="${newItem.id}"]`) 
+                        || listBody?.querySelector(`[data-item-id="${newItem.id}"]`);
+        
+        if (existingEl) {
+            // Partial update: only change what's different
+            const nameEl = existingEl.querySelector('.text-sm.font-medium');
+            if (nameEl && nameEl.textContent !== newItem.name) {
+                nameEl.textContent = newItem.name;
+            }
+            
+            // Update data attributes
+            existingEl.dataset.itemName = newItem.name;
+            existingEl.dataset.itemStarred = newItem.starred || false;
+            existingEl.dataset.itemIzin = newItem.izin || 0;
+        } else {
+            // 3. Add new items
+            if (gridEl) gridEl.insertAdjacentHTML('beforeend', renderGridItem(newItem));
+            if (listBody) listBody.insertAdjacentHTML('beforeend', renderListRow(newItem));
+        }
+    });
+    
+    // 4. Handle empty state
+    if (newItems.length === 0) {
+        gridEl && (gridEl.innerHTML = '');
+        listBody && (listBody.innerHTML = '');
+        emptyEl?.classList.remove('hidden');
+    } else {
+        emptyEl?.classList.add('hidden');
+    }
+    
+    // Update items array
+    items = newItems;
+    
+    // Rebind events for new elements
+    bindItemEvents();
+}
+
+// ── Load + render (with smart update) ──────────────────────────
 export async function loadFiles(searchQuery='') {
     if (isLoading) return;
     isLoading = true;
@@ -173,22 +243,28 @@ export async function loadFiles(searchQuery='') {
             data = await res.json();
         }
 
-        items = data.data;
+        const newItems = data.data;
         totalPages = data.lastPage || 1;
 
+        // SMART UPDATE: Use diff-based update instead of full re-render
         if (items.length === 0) {
-            gridEl && (gridEl.innerHTML='');
-            listBody && (listBody.innerHTML='');
-            emptyEl?.classList.remove('hidden');
+            // First load - full render
+            if (newItems.length === 0) {
+                gridEl && (gridEl.innerHTML='');
+                listBody && (listBody.innerHTML='');
+                emptyEl?.classList.remove('hidden');
+            } else {
+                gridEl && (gridEl.innerHTML = newItems.map(renderGridItem).join(''));
+                listBody && (listBody.innerHTML = newItems.map(renderListRow).join(''));
+                emptyEl?.classList.add('hidden');
+            }
         } else {
-            gridEl && (gridEl.innerHTML = items.map(renderGridItem).join(''));
-            listBody && (listBody.innerHTML = items.map(renderListRow).join(''));
-            emptyEl?.classList.add('hidden');
+            // Subsequent loads - smart update
+            smartUpdate(newItems);
         }
 
         renderPagination();
         renderSelectionBar();
-        bindItemEvents();
     } catch(e) {
         showToast('Failed to load files: ' + e.message, 'error');
     } finally {
@@ -460,4 +536,108 @@ export function insertFile(file) {
     if (listBody) listBody.insertAdjacentHTML('afterbegin', renderListRow(file));
     document.getElementById('empty-state')?.classList.add('hidden');
     bindItemEvents();
+}
+
+// ── Remove file without full reload ────────────────────────────
+export function removeFile(id) {
+    const gridEl   = document.getElementById('grid-view');
+    const listBody = document.getElementById('list-body');
+    
+    // Remove from items array
+    items = items.filter(item => item.id !== id);
+    
+    // Remove from DOM
+    const gridItem = gridEl?.querySelector(`[data-item-id="${id}"]`);
+    const listItem = listBody?.querySelector(`[data-item-id="${id}"]`);
+    
+    gridItem?.remove();
+    listItem?.remove();
+    
+    // Show empty state if no items
+    if (items.length === 0) {
+        gridEl && (gridEl.innerHTML = '');
+        listBody && (listBody.innerHTML = '');
+        document.getElementById('empty-state')?.classList.remove('hidden');
+    }
+}
+
+// ── Update file item without full reload ───────────────────────
+export function updateFileItem(updatedFile) {
+    const gridEl   = document.getElementById('grid-view');
+    const listBody = document.getElementById('list-body');
+    const id = updatedFile.id;
+    
+    // Update items array
+    const idx = items.findIndex(item => item.id === id);
+    if (idx >= 0) {
+        items[idx] = { ...items[idx], ...updatedFile };
+    }
+    
+    // Update DOM - partial update only
+    const gridItem = gridEl?.querySelector(`[data-item-id="${id}"]`);
+    const listItem = listBody?.querySelector(`[data-item-id="${id}"]`);
+    
+    if (gridItem) {
+        // Update name
+        const nameEl = gridItem.querySelector('.text-sm.font-medium');
+        if (nameEl && updatedFile.name) nameEl.textContent = updatedFile.name;
+        
+        // Update starred badge
+        if (updatedFile.starred !== undefined) {
+            const existingBadge = gridItem.querySelector('.text-amber-400');
+            if (updatedFile.starred && !existingBadge) {
+                const badge = document.createElement('span');
+                badge.className = 'absolute top-2 left-2 z-10 text-amber-400';
+                badge.title = 'Starred';
+                badge.innerHTML = '<svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>';
+                gridItem.insertBefore(badge, gridItem.firstChild);
+            } else if (!updatedFile.starred && existingBadge) {
+                existingBadge.remove();
+            }
+        }
+        
+        // Update izin badge
+        if (updatedFile.izin !== undefined) {
+            const existingBadge = gridItem.querySelector('.bg-green-400');
+            if (updatedFile.izin === 1 && !existingBadge) {
+                const badge = document.createElement('span');
+                badge.className = 'absolute top-2 right-8 z-10 w-1.5 h-1.5 bg-green-400 rounded-full';
+                badge.title = 'Public';
+                gridItem.insertBefore(badge, gridItem.firstChild);
+            } else if (updatedFile.izin !== 1 && existingBadge) {
+                existingBadge.remove();
+            }
+        }
+    }
+    
+    if (listItem) {
+        // Update name
+        const nameEl = listItem.querySelector('.text-sm.font-medium');
+        if (nameEl && updatedFile.name) nameEl.textContent = updatedFile.name;
+        
+        // Update badges
+        if (updatedFile.izin !== undefined) {
+            const existingPublic = listItem.querySelector('.text-green-600');
+            if (updatedFile.izin === 1 && !existingPublic) {
+                const span = document.createElement('span');
+                span.className = 'text-xs text-green-600 font-medium';
+                span.textContent = 'Public';
+                nameEl?.parentNode.appendChild(span);
+            } else if (updatedFile.izin !== 1 && existingPublic) {
+                existingPublic.remove();
+            }
+        }
+        
+        if (updatedFile.starred !== undefined) {
+            const existingStar = listItem.querySelector('.text-amber-500');
+            if (updatedFile.starred && !existingStar) {
+                const span = document.createElement('span');
+                span.className = 'text-xs text-amber-500';
+                span.textContent = '⭐';
+                nameEl?.parentNode.appendChild(span);
+            } else if (!updatedFile.starred && existingStar) {
+                existingStar.remove();
+            }
+        }
+    }
 }

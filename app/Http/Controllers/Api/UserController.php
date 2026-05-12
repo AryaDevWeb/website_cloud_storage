@@ -103,10 +103,15 @@ class UserController extends Controller
     public function destroy(Request $request): JsonResponse
     {
         $user = $request->user();
-        $path = 'data_user/' . $user->id;
+        $path = 'users/' . $user->id;
 
-        if (Storage::exists($path)) {
-            Storage::deleteDirectory($path);
+        if (Storage::disk('local')->exists($path)) {
+            Storage::disk('local')->deleteDirectory($path);
+        }
+
+        // Also clean thumbnails
+        if (Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->deleteDirectory($path);
         }
 
         $user->tokens()->delete();

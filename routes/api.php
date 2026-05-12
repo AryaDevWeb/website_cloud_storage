@@ -18,8 +18,7 @@ Route::prefix('v1')->group(function () {
 
     // ── Public routes (no token required) ──────────────────────────────
     Route::prefix('auth')->group(function () {
-        Route::post('/login',    [AuthController::class, 'login']);
-        Route::post('/register', [AuthController::class, 'register']);
+        Route::post('/google',   [App\Http\Controllers\Api\OAuthController::class, 'google']);
     });
 
     // ── Protected routes (requires valid Sanctum token) ─────────────────

@@ -1,5 +1,5 @@
 /**
- * websocket.js — WebSocket client + polling fallback
+ * websocket.js — WebSocket client (no polling)
  *
  * ╔════════════════════════════════════════════════════════════╗
  * ║ TO USE: Set WS_URL to your WebSocket server address.     ║
@@ -9,24 +9,26 @@
  * ║   { type: 'file_updated', data: { ...file } }           ║
  * ╚════════════════════════════════════════════════════════════╝
  */
-import { loadFiles, insertFile } from './fileManager.js';
+import { loadFiles, insertFile, removeFile, updateFileItem } from './fileManager.js';
 import { showToast } from './ui.js';
 
-const WS_URL = null;  // e.g. 'ws://localhost:6001/ws/files' — set null to use polling
-const POLL_INTERVAL = 30000; // 30s fallback polling
+const WS_URL = null;  // e.g. 'ws://localhost:6001/ws/files' — set null to disable
 
 let ws = null;
-let pollTimer = null;
 
 export function initRealtime() {
     if (WS_URL) {
         connectWS();
-    } else {
-        startPolling();
     }
+    // SMART TRIGGER: Only refresh when tab becomes visible
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            loadFiles();
+        }
+    });
 }
 
-// ── WebSocket ───────────────────────────────────────────────
+// ── WebSocket connection ──────────────────────────────────────
 function connectWS() {
     try {
         ws = new WebSocket(WS_URL);
@@ -43,32 +45,16 @@ function connectWS() {
         });
 
         ws.addEventListener('close', () => {
-            console.log('[WS] Disconnected, falling back to polling');
+            console.log('[WS] Disconnected');
             ws = null;
-            startPolling();
         });
 
         ws.addEventListener('error', () => {
             ws?.close();
         });
     } catch {
-        startPolling();
+        console.log('[WS] Failed to connect');
     }
-}
-
-// ── Polling fallback ────────────────────────────────────────
-function startPolling() {
-    if (pollTimer) return;
-    console.log('[Poll] Starting poll every', POLL_INTERVAL / 1000, 's');
-    pollTimer = setInterval(() => {
-        loadFiles(); // re-fetch from API
-    }, POLL_INTERVAL);
-}
-
-export function stopRealtime() {
-    ws?.close();
-    clearInterval(pollTimer);
-    pollTimer = null;
 }
 
 // ── Event handler ───────────────────────────────────────────
@@ -79,10 +65,10 @@ function handleEvent(msg) {
             showToast(`"${msg.data.name}" was added`, 'success');
             break;
         case 'file_removed':
-            loadFiles(); // simple reload
+            removeFile(msg.data.id);
             break;
         case 'file_updated':
-            loadFiles(); // simple reload
+            updateFileItem(msg.data);
             break;
     }
 }
