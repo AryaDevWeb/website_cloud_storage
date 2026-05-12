@@ -121,7 +121,7 @@ class Beranda extends Controller
     public function hapus_file($id)
     {
         $user = auth()->user();
-        $file = $user->galleries()->findOrFail($id);
+        $file = Gallery::where('user_id',$id);
         
         // Quota is NOT recovered on soft delete anymore (Standard Policy)
         $file->delete();
