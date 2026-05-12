@@ -84,13 +84,13 @@ class ProcessFilePreview implements ShouldQueue
         // Intervention image processing using memory
         $manager = new ImageManager(new Driver());
         // Read file
-        $image = $manager->read($originalAbsolutePath);
+        $image = $manager->decodePath($originalAbsolutePath);
         
         // Resize down if wider than 300px
         $image->scaleDown(width: 300);
 
         // Encode to webp
-        $encoded = $image->toWebp();
+        $encoded = $image->encodeUsingFileExtension('webp');
         
         // Save to public disk
         Storage::disk('public')->put($thumbnailRelPath, $encoded->toString());
