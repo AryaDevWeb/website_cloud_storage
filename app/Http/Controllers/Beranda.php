@@ -16,6 +16,7 @@ use Spatie\PdfToText\Pdf;
 use Illuminate\Validation\Rule;
 
 
+
 class Beranda extends Controller
 {
     /**

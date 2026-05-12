@@ -23,6 +23,7 @@ class OAuthController extends Controller
     public function handleGoogleCallback()
     {
         try {
+            /** @var \Laravel\Socialite\Two\User $googleUser */
             $googleUser = Socialite::driver('google')->user();
 
             // Check if user exists by google_id
