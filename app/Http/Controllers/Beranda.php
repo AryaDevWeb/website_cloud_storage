@@ -125,7 +125,7 @@ class Beranda extends Controller
                 $preview_type = $this->mapPreviewType($extension);
                 
                 // Determine initial conversion status
-                $needsConversion = in_array($preview_type, ['image', 'video', 'office']);
+                $needsConversion = in_array($preview_type, ['image', 'video', 'office', 'pdf']);
                 $conversion_status = $needsConversion ? 'pending' : 'done';
 
                 $gallery = Gallery::create([
@@ -587,7 +587,7 @@ class Beranda extends Controller
             $preview_type = $this->mapPreviewType($extension);
             
             // Determine initial conversion status
-            $needsConversion = in_array($preview_type, ['image', 'video', 'office']);
+            $needsConversion = in_array($preview_type, ['image', 'video', 'office', 'pdf']);
             $conversion_status = $needsConversion ? 'pending' : 'done';
 
             $gallery = Gallery::create([
