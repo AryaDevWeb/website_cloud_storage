@@ -11,9 +11,12 @@ return new class extends Migration
      * 
      * Menambahkan foreign key constraint untuk galleries.folder_id -> folders.id
      * Menggunakan cascadeOnDelete agar file dalam folder juga dihapus saat folder dihapus.
-     */
     public function up(): void
     {
+        if (Schema::getConnection()->getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Cek apakah kolom folder_id sudah ada
         $columnExists = \DB::getSchemaBuilder()->hasColumn('galleries', 'folder_id');
         
@@ -42,6 +45,9 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (Schema::getConnection()->getDriverName() === 'sqlite') {
+            return;
+        }
         Schema::table('galleries', function (Blueprint $table) {
             $table->dropForeign(['folder_id']);
         });

@@ -80,28 +80,51 @@ class ProcessFilePreview implements ShouldQueue
 
     private function processImage(Gallery $gallery, string $originalAbsolutePath, $user_id, $uuid)
     {
-        // 3. THUMBNAIL (HYBRID APPROACH): Optional but recommended "public" for thumbnails for performance.
-        // I will use disk('public') for thumbnails.
-        $thumbnailRelPath = "users/{$user_id}/thumbnails/{$uuid}.webp";
-        // Intervention image processing using memory
-        $manager = new ImageManager(new Driver());
-        // Read file
-        $image = $manager->decodePath($originalAbsolutePath);
-        
-        // Resize down if wider than 300px
-        $image->scaleDown(width: 300);
+        try {
+            $ext = strtolower($gallery->extension);
+            $mime = strtolower($gallery->mime_type);
+            
+            if ($ext === 'svg' || $mime === 'image/svg+xml') {
+                $thumbnailRelPath = "users/{$user_id}/thumbnails/{$uuid}.svg";
+                Storage::disk('public')->put($thumbnailRelPath, file_get_contents($originalAbsolutePath));
+                $gallery->update([
+                    'thumbnail_path' => $thumbnailRelPath,
+                    'conversion_status' => 'done',
+                    'preview_ready_at' => now(),
+                ]);
+                return;
+            }
 
-        // Encode to webp
-        $encoded = $image->encodeUsingFileExtension('webp');
-        
-        // Save to public disk
-        Storage::disk('public')->put($thumbnailRelPath, $encoded->toString());
+            // 3. THUMBNAIL (HYBRID APPROACH): Optional but recommended "public" for thumbnails for performance.
+            // I will use disk('public') for thumbnails.
+            $thumbnailRelPath = "users/{$user_id}/thumbnails/{$uuid}.webp";
+            // Intervention image processing using memory
+            $manager = new ImageManager(new Driver());
+            // Read file
+            $image = $manager->decodePath($originalAbsolutePath);
+            
+            // Resize down if wider than 300px
+            $image->scaleDown(width: 300);
 
-        $gallery->update([
-            'thumbnail_path' => $thumbnailRelPath,
-            'conversion_status' => 'done',
-            'preview_ready_at' => now(),
-        ]);
+            // Encode to webp
+            $encoded = $image->encodeUsingFileExtension('webp');
+            
+            // Save to public disk
+            Storage::disk('public')->put($thumbnailRelPath, $encoded->toString());
+
+            $gallery->update([
+                'thumbnail_path' => $thumbnailRelPath,
+                'conversion_status' => 'done',
+                'preview_ready_at' => now(),
+            ]);
+        } catch (\Exception $e) {
+            \Log::warning("processImage (thumbnail generation) failed for Gallery ID {$gallery->id}: " . $e->getMessage());
+            // Fallback: mark as done without thumbnail so that the image is still viewable
+            $gallery->update([
+                'conversion_status' => 'done',
+                'preview_ready_at' => now(),
+            ]);
+        }
     }
 
     private function processVideo(Gallery $gallery, string $originalAbsolutePath, $user_id, $uuid)

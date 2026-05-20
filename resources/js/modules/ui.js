@@ -69,6 +69,13 @@ function applySidebarState() {
         sidebar.classList.add('w-16');
         main?.classList.remove('lg:ml-60');
         main?.classList.add('lg:ml-16');
+        const newBtn = document.getElementById('sidebar-new-toggle');
+        if (newBtn) {
+            newBtn.classList.remove('rounded-2xl', 'px-3', 'lg:justify-between', 'gap-3');
+            newBtn.classList.add('rounded-xl', 'p-0', 'w-10', 'h-10', 'mx-auto', 'justify-center');
+            const span = newBtn.querySelector('span');
+            if (span) span.classList.remove('gap-3');
+        }
         labels.forEach(l => l.classList.add('lg:hidden'));
         storageBlock?.classList.add('hidden');
         storageIcon?.classList.remove('hidden'); storageIcon?.classList.add('flex');
@@ -78,6 +85,13 @@ function applySidebarState() {
         sidebar.classList.add('w-60');
         main?.classList.remove('lg:ml-16');
         main?.classList.add('lg:ml-60');
+        const newBtn = document.getElementById('sidebar-new-toggle');
+        if (newBtn) {
+            newBtn.classList.add('rounded-2xl', 'px-3', 'lg:justify-between', 'gap-3');
+            newBtn.classList.remove('rounded-xl', 'p-0', 'w-10', 'h-10', 'mx-auto', 'justify-center');
+            const span = newBtn.querySelector('span');
+            if (span) span.classList.add('gap-3');
+        }
         labels.forEach(l => l.classList.remove('lg:hidden'));
         storageBlock?.classList.remove('hidden');
         storageIcon?.classList.add('hidden'); storageIcon?.classList.remove('flex');
@@ -209,6 +223,17 @@ export function initContextMenu(actionHandler) {
         };
         // hide download for folders
         menu.querySelector('[data-ctx="download"]')?.classList.toggle('hidden', ctxTargetItem.type === 'folder');
+
+        // Trash mode visibility
+        const isTrash = window.__TRASH_MODE__ === true;
+        menu.querySelectorAll('.ctx-trash-only').forEach(el => el.classList.toggle('hidden', !isTrash));
+        menu.querySelectorAll('.ctx-non-trash').forEach(el => el.classList.toggle('hidden', isTrash));
+        // Also hide non-trash items in trash
+        menu.querySelector('[data-ctx="star"]')?.classList.toggle('hidden', isTrash);
+        menu.querySelector('[data-ctx="rename"]')?.classList.toggle('hidden', isTrash);
+        menu.querySelector('[data-ctx="move"]')?.classList.toggle('hidden', isTrash);
+        menu.querySelector('[data-ctx="share"]')?.classList.toggle('hidden', isTrash);
+
         menu.style.left = Math.min(e.clientX, window.innerWidth - 200) + 'px';
         menu.style.top = Math.min(e.clientY, window.innerHeight - 280) + 'px';
         menu.classList.remove('hidden');
@@ -237,6 +262,15 @@ export function showBottomSheet(item, actionHandler) {
     title.textContent = item.name;
     // hide download for folders
     sheet.querySelector('[data-bs="download"]')?.classList.toggle('hidden', item.type === 'folder');
+
+    // Trash mode visibility
+    const isTrash = window.__TRASH_MODE__ === true;
+    sheet.querySelectorAll('.bs-trash-only').forEach(el => el.classList.toggle('hidden', !isTrash));
+    sheet.querySelectorAll('.bs-non-trash').forEach(el => el.classList.toggle('hidden', isTrash));
+    // Also hide non-trash items in trash
+    sheet.querySelector('[data-bs="rename"]')?.classList.toggle('hidden', isTrash);
+    sheet.querySelector('[data-bs="move"]')?.classList.toggle('hidden', isTrash);
+    sheet.querySelector('[data-bs="share"]')?.classList.toggle('hidden', isTrash);
 
     sheet.querySelectorAll('[data-bs]').forEach(btn => {
         btn.onclick = () => { hideBottomSheet(); actionHandler?.(btn.dataset.bs, bsTarget); };

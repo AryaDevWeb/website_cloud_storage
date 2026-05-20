@@ -14,9 +14,7 @@
         </h1>
         <p class="text-sm text-gray-500 mt-1">Here's what's happening with your storage today.</p>
     </div>
-    <div class="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-100 rounded-xl">
-        Semua aksi baru dipindah ke tombol New di sidebar
-    </div>
+
 </div>
 
 {{-- ══════════════════════════════════════════════════════════ --}}
@@ -229,10 +227,7 @@
         </div>
         @endif
 
-        {{-- Quick actions --}}
-        <div class="mt-5 pt-4 border-t border-gray-100">
-            <p class="text-xs text-gray-500">Untuk upload file, upload folder, atau buat folder baru, pakai tombol <span class="font-semibold text-gray-700">New</span> di sidebar.</p>
-        </div>
+
     </div>
 </div>
 

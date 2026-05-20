@@ -10,13 +10,11 @@
             <p class="text-sm text-gray-500 mt-0.5">Manage your files and folders</p>
         </div>
         <div class="flex items-center gap-2 flex-wrap">
-            <span class="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-100 rounded-xl">
-                Gunakan tombol New di sidebar untuk upload atau buat folder
-            </span>
+
             <select id="sort-select" class="appearance-none px-3 py-2 pr-8 bg-white border border-gray-200 rounded-xl text-sm text-gray-600 cursor-pointer focus:outline-none focus:border-blue-600" aria-label="Sort by">
                 <option value="name">Name</option>
                 <option value="date">Date</option>
-                <optiWon value="size">Size</option>
+                <option value="size">Size</option>
             </select>
             <div class="flex items-center bg-gray-100 border border-gray-200 rounded-xl p-0.5" role="radiogroup" aria-label="View mode">
                 <button id="grid-btn" class="p-1.5 rounded-lg transition-colors bg-white shadow-sm text-blue-600" role="radio" aria-checked="true" aria-label="Grid">
@@ -63,7 +61,7 @@
         </div>
         <h3 class="text-lg font-semibold text-gray-800 mb-1">No files yet</h3>
         <p class="text-sm text-gray-500 mb-6 max-w-xs">Upload your first file or create a folder to get started.</p>
-        <p class="text-xs text-gray-500 max-w-sm">Semua aksi baru dipusatkan ke tombol <span class="font-semibold text-gray-700">New</span> di sidebar.</p>
+
     </div>
 
     <div id="pagination" class="flex justify-center mt-6"></div>

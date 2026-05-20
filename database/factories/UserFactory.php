@@ -23,7 +23,7 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'google_id' => fake()->unique()->numerify('1###################'),
             'avatar' => fake()->imageUrl(),
-            'storage_quota' => 5 * 1024 * 1024 * 1024, // 5 GB
+            'storage_quota' => 1 * 1024 * 1024 * 1024, // 1 GB
             'storage_used' => 0,
             'remember_token' => Str::random(10),
         ];

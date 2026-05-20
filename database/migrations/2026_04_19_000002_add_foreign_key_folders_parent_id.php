@@ -14,6 +14,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::getConnection()->getDriverName() === 'sqlite') {
+            return;
+        }
+
         // Cek apakah constraint sudah ada
         $constraintExists = \DB::select("
             SELECT 1 FROM information_schema.table_constraints 
@@ -52,6 +56,9 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (Schema::getConnection()->getDriverName() === 'sqlite') {
+            return;
+        }
         Schema::table('folders', function (Blueprint $table) {
             $table->dropForeign(['parent_id']);
         });

@@ -9,11 +9,7 @@
         <p class="text-sm text-gray-400 mt-0.5">{{ $pageDesc ?? '' }}</p>
     </div>
     <div class="flex items-center gap-2 flex-wrap">
-        @if(!($trashMode ?? false))
-        <span class="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-100 rounded-xl">
-            Gunakan tombol New di sidebar
-        </span>
-        @endif
+
         @if($trashMode ?? false)
         <button id="empty-trash-btn"
                 class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors">
@@ -69,9 +65,7 @@
     </div>
     <h3 class="text-base font-bold text-gray-700 mb-1">{{ $emptyTitle ?? 'Nothing here' }}</h3>
     <p class="text-sm text-gray-400 max-w-xs">{{ $emptyDesc ?? '' }}</p>
-    @if(!($trashMode ?? false))
-    <p class="mt-5 text-xs font-medium text-gray-500">Gunakan tombol <span class="text-gray-700">New</span> di sidebar untuk upload file, upload folder, atau buat folder baru.</p>
-    @endif
+
 </div>
 
 <div id="pagination" class="flex justify-center mt-6"></div>

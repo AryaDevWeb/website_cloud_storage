@@ -414,12 +414,12 @@ class Beranda extends Controller
     private function mapPreviewType($ext): string
     {
         return match(true) {
-            in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp']) => 'image',
+            in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico', 'tiff']) => 'image',
             in_array($ext, ['mp4', 'webm', 'mov', 'avi']) => 'video',
             in_array($ext, ['mp3', 'wav', 'ogg', 'flac']) => 'audio',
             $ext === 'pdf' => 'pdf',
             in_array($ext, ['txt', 'md', 'json', 'js', 'php', 'py', 'css', 'html', 'sh', 'sql']) => 'text/code',
-            in_array($ext, ['docx', 'xlsx', 'pptx']) => 'office',
+            in_array($ext, ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']) => 'office',
             default => 'unknown',
         };
     }
@@ -499,6 +499,12 @@ class Beranda extends Controller
             'perPage' => $perPage,
             'lastPage' => ceil($total / max(1, $perPage))
         ]);
+    }
+
+    public function getFileJson($id)
+    {
+        $file = auth()->user()->galleries()->withTrashed()->findOrFail($id);
+        return response()->json($this->mapFile($file));
     }
 
     public function folderAjax(Request $request)

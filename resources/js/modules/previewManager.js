@@ -141,7 +141,7 @@ export async function openPreview(fileId, name = '') {
     // Determine type safely
     let pType = fileObj.preview_type;
     if (!pType) {
-        if (['jpg','jpeg','png','gif','webp','svg','bmp'].includes(ext)) {
+        if (['jpg','jpeg','png','gif','webp','svg','bmp','ico','tiff'].includes(ext)) {
             pType = 'image';
         } else if (['mp4','webm','mov','avi','ogg'].includes(ext)) {
             pType = 'video';
@@ -151,7 +151,7 @@ export async function openPreview(fileId, name = '') {
             pType = 'pdf';
         } else if (['txt','md','json','csv','xml','html','css','js','ts','php','py','sh'].includes(ext)) {
             pType = 'text/code';
-        } else if (['docx','xlsx','pptx'].includes(ext)) {
+        } else if (['doc','docx','xls','xlsx','ppt','pptx'].includes(ext)) {
             pType = 'office';
         } else {
             pType = 'unknown';
@@ -160,6 +160,11 @@ export async function openPreview(fileId, name = '') {
 
     // Determine Status safely
     let status = fileObj.status || 'ready';
+    if (fileObj.conversion_status === 'pending') {
+        status = 'processing';
+    } else if (fileObj.conversion_status === 'failed') {
+        status = 'failed';
+    }
 
     if (status === 'processing') {
         body.innerHTML = LoadingPreview('File is being processed...');

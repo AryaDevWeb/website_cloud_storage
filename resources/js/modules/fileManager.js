@@ -15,6 +15,8 @@ let currentSort = localStorage.getItem('fileSort') || 'name';
 let currentPage = 1;
 let totalPages = 1;
 let isLoading = false;
+let currentSearchQuery = '';
+let latestRequestId = 0;
 
 // Icon palette
 const ICON_COLORS = {
@@ -76,7 +78,7 @@ function renderGridItem(item) {
          data-item-starred="${item.starred||false}" data-item-izin="${item.izin||0}"
          class="group relative bg-white border ${sel ? 'border-blue-400 ring-2 ring-blue-100' : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'} rounded-xl p-4 cursor-pointer transition-all duration-150"
          tabindex="0" role="option" aria-selected="${sel}" aria-label="${item.type}: ${item.name}">
-        ${starredBadge}${sharedBadge}
+         ${starredBadge}${sharedBadge}
         <input type="checkbox" ${sel ? 'checked' : ''}
                class="file-checkbox absolute top-3 left-3 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 opacity-0 group-hover:opacity-100 ${sel ? '!opacity-100' : ''} transition-opacity z-10"
                aria-label="Select ${item.name}">
@@ -91,7 +93,7 @@ function renderGridItem(item) {
             <span class="text-xs text-gray-400">${item.type === 'folder' ? (item.items||0)+' items' : formatBytes(item.size)}</span>
             ${isTrash() ? `<div class="flex gap-1">
                 <button data-restore="${item.id}" class="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium transition-colors">Restore</button>
-                <button data-perm-delete="${item.id}" class="text-xs px-2 py-0.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-medium transition-colors">Delete</button>
+                <button data-perm-delete="${item.id}" class="text-xs px-2 py-0.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-medium transition-colors">Delete Permanently</button>
             </div>` : `<span class="text-xs text-gray-400">${formatDate(item.modified)}</span>`}
         </div>
     </div>`;
@@ -129,7 +131,7 @@ function renderListRow(item) {
         <td class="px-4 py-3 w-16">
             ${isTrash() ? `<div class="flex gap-1">
                 <button data-restore="${item.id}" class="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium">Restore</button>
-                <button data-perm-delete="${item.id}" class="text-xs px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-medium">Delete</button>
+                <button data-perm-delete="${item.id}" class="text-xs px-2 py-1 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-medium">Delete Permanently</button>
             </div>` : `<button data-kebab class="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Actions"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/></svg></button>`}
         </td>
     </tr>`;
@@ -164,7 +166,6 @@ function smartUpdate(newItems) {
     const emptyEl  = document.getElementById('empty-state');
     
     const newIds = new Set(newItems.map(i => i.id));
-    const oldIds = new Set(items.map(i => i.id));
     
     // 1. Remove items no longer in server response
     items.forEach(oldItem => {
@@ -176,20 +177,19 @@ function smartUpdate(newItems) {
     
     // 2. Update existing items (partial update)
     newItems.forEach(newItem => {
-        const existingEl = gridEl?.querySelector(`[data-item-id="${newItem.id}"]`) 
-                        || listBody?.querySelector(`[data-item-id="${newItem.id}"]`);
-        
-        if (existingEl) {
-            // Partial update: only change what's different
-            const nameEl = existingEl.querySelector('.text-sm.font-medium');
-            if (nameEl && nameEl.textContent !== newItem.name) {
-                nameEl.textContent = newItem.name;
-            }
-            
-            // Update data attributes
-            existingEl.dataset.itemName = newItem.name;
-            existingEl.dataset.itemStarred = newItem.starred || false;
-            existingEl.dataset.itemIzin = newItem.izin || 0;
+        const existingEls = document.querySelectorAll(`[data-item-id="${newItem.id}"]`);
+        if (existingEls.length > 0) {
+            existingEls.forEach(el => {
+                const nameEl = el.querySelector('.text-sm.font-medium');
+                if (nameEl && nameEl.textContent !== newItem.name) {
+                    nameEl.textContent = newItem.name;
+                }
+                
+                // Update data attributes
+                el.dataset.itemName = newItem.name;
+                el.dataset.itemStarred = newItem.starred || false;
+                el.dataset.itemIzin = newItem.izin || 0;
+            });
         } else {
             // 3. Add new items
             if (gridEl) gridEl.insertAdjacentHTML('beforeend', renderGridItem(newItem));
@@ -214,9 +214,14 @@ function smartUpdate(newItems) {
 }
 
 // ── Load + render (with smart update) ──────────────────────────
-export async function loadFiles(searchQuery='') {
+export async function loadFiles(searchQuery = null) {
     if (isLoading) return;
     isLoading = true;
+
+    if (searchQuery !== null && searchQuery !== currentSearchQuery) {
+        currentSearchQuery = searchQuery;
+        currentPage = 1;
+    }
 
     const gridEl   = document.getElementById('grid-view');
     const listBody = document.getElementById('list-body');
@@ -225,6 +230,8 @@ export async function loadFiles(searchQuery='') {
 
     loadingEl?.classList.remove('hidden');
     emptyEl?.classList.add('hidden');
+
+    const requestId = ++latestRequestId;
 
     try {
         const section = window.__FILE_SECTION__ || 'files';
@@ -237,14 +244,22 @@ export async function loadFiles(searchQuery='') {
         let data;
         if (section === 'files') {
             const { fetchFiles: ff } = await import('./api.js');
-            data = await ff({ q: searchQuery, sort: currentSort, page: currentPage });
+            data = await ff({ q: currentSearchQuery, sort: currentSort, page: currentPage });
         } else {
             const res = await fetch(endpoint);
             data = await res.json();
         }
 
+        if (requestId !== latestRequestId) return;
+
         const newItems = data.data;
         totalPages = data.lastPage || 1;
+
+        if (newItems.length === 0 && currentPage > 1) {
+            currentPage--;
+            isLoading = false;
+            return loadFiles();
+        }
 
         // SMART UPDATE: Use diff-based update instead of full re-render
         if (items.length === 0) {
@@ -258,6 +273,8 @@ export async function loadFiles(searchQuery='') {
                 listBody && (listBody.innerHTML = newItems.map(renderListRow).join(''));
                 emptyEl?.classList.add('hidden');
             }
+            items = newItems;
+            bindItemEvents();
         } else {
             // Subsequent loads - smart update
             smartUpdate(newItems);
@@ -268,15 +285,18 @@ export async function loadFiles(searchQuery='') {
     } catch(e) {
         showToast('Failed to load files: ' + e.message, 'error');
     } finally {
-        isLoading = false;
-        loadingEl?.classList.add('hidden');
+        if (requestId === latestRequestId) {
+            isLoading = false;
+            loadingEl?.classList.add('hidden');
+        }
     }
 }
 
 // ── Item events ────────────────────────────────────────────────
 function bindItemEvents() {
     // Trash: restore / permanent delete buttons
-    document.querySelectorAll('[data-restore]').forEach(btn => {
+    document.querySelectorAll('[data-restore]:not([data-events-bound])').forEach(btn => {
+        btn.dataset.eventsBound = "true";
         btn.addEventListener('click', async e => {
             e.stopPropagation();
             const id = btn.dataset.restore;
@@ -285,7 +305,8 @@ function bindItemEvents() {
             loadFiles();
         });
     });
-    document.querySelectorAll('[data-perm-delete]').forEach(btn => {
+    document.querySelectorAll('[data-perm-delete]:not([data-events-bound])').forEach(btn => {
+        btn.dataset.eventsBound = "true";
         btn.addEventListener('click', async e => {
             e.stopPropagation();
             const id = btn.dataset.permDelete;
@@ -297,16 +318,21 @@ function bindItemEvents() {
         });
     });
 
-    document.querySelectorAll('[data-item-id]').forEach((el, idx) => {
+    document.querySelectorAll('[data-item-id]:not([data-events-bound])').forEach((el) => {
+        el.dataset.eventsBound = "true";
         el.addEventListener('click', e => {
             if (e.target.closest('[data-kebab]') || e.target.classList.contains('file-checkbox') ||
                 e.target.closest('[data-restore]') || e.target.closest('[data-perm-delete]')) return;
             const id = el.dataset.itemId;
+            
+            const allItems = Array.from(document.querySelectorAll('[data-item-id]'));
+            const idx = allItems.indexOf(el);
+            
             if (e.ctrlKey || e.metaKey) {
                 toggleSelect(id);
             } else if (e.shiftKey && lastClickedIndex >= 0) {
-                const [start, end] = [Math.min(lastClickedIndex,idx), Math.max(lastClickedIndex,idx)];
-                Array.from(document.querySelectorAll('[data-item-id]')).slice(start, end+1).forEach(el2 => addSelect(el2.dataset.itemId));
+                const [start, end] = [Math.min(lastClickedIndex, idx), Math.max(lastClickedIndex, idx)];
+                allItems.slice(start, end+1).forEach(el2 => addSelect(el2.dataset.itemId));
             } else {
                 selectedIds.clear();
                 addSelect(id);
@@ -324,7 +350,6 @@ function bindItemEvents() {
         });
     });
 }
-
 // ── Helpers ────────────────────────────────────────────────────
 function csrfToken() { return document.querySelector('meta[name="csrf-token"]')?.content || ''; }
 function addSelect(id)    { selectedIds.add(id); }
@@ -420,6 +445,15 @@ export async function handleAction(action, item) {
         case 'restore': {
             await fetch(`/api/file/${item.id}/restore`, { method:'POST', headers:{'X-CSRF-TOKEN': csrfToken()} });
             showToast('Item restored', 'success');
+            loadFiles();
+            break;
+        }
+
+        case 'perm-delete': {
+            const ok = await confirmAction({ title:'Permanently delete?', message:'This cannot be undone.', confirmText:'Delete Forever' });
+            if (!ok) return;
+            await fetch(`/api/file/${item.id}/permanent`, { method:'DELETE', headers:{'X-CSRF-TOKEN': csrfToken()} });
+            showToast('Permanently deleted', 'success');
             loadFiles();
             break;
         }

@@ -252,7 +252,7 @@
         </div>
         <h3 class="text-[#0f172a] font-semibold text-lg mb-2">Folder Kosong</h3>
         <p class="text-sm text-[#64748b] mb-6 max-w-xs">Upload file atau buat subfolder di sini.</p>
-        <p class="text-xs font-medium text-[#64748b]">Semua aksi baru dipusatkan ke tombol <span class="text-[#0f172a]">New</span> di sidebar.</p>
+
     </div>
     @endif
 

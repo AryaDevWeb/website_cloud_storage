@@ -66,6 +66,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/api/files/starred', [Beranda::class, 'starredFiles']);
     Route::get('/api/files/shared', [Beranda::class, 'sharedFiles']);
     Route::get('/api/files/trash', [Beranda::class, 'trashedFiles']);
+    Route::get('/api/files/{id}', [Beranda::class, 'getFileJson']);
     Route::get('/api/folders/tree', [Beranda::class, 'folderTree']);
 
     Route::post('/api/upload', [Beranda::class, 'uploadAjax']);
