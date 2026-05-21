@@ -16,7 +16,12 @@ class Folder extends Model
         'parent_id',
         'nama_folder',
         'permission',
-        'path'
+        'path',
+        'is_shared_drive',
+        'scope_kelas',
+        'scope_jurusan',
+        'scope_tendik',
+        'is_assignment_folder'
     ];
 
     public function user()

@@ -24,6 +24,9 @@ Route::get('/', function () {
     return view('register');
 });
 
+Route::post('/register', [Register::class, 'register']);
+Route::post('/login', [Login::class, 'login']);
+
 Route::middleware(['auth', 'verified'])->group(function () {
     // Dashboard
     Route::get('/dashboard/{id}', [Beranda::class, 'dashboard'])->name('dashboard');

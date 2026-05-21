@@ -44,28 +44,32 @@ class ProcessFilePreview implements ShouldQueue
 
         $gallery->update(['conversion_status' => 'processing']);
 
+        $extractedAbsolutePath = null;
+
         try {
             $user_id = $gallery->user_id;
             $uuid = pathinfo($gallery->file, PATHINFO_FILENAME);
             $originalPath = $gallery->path;
 
-            // Get absolute path of the original file
+            // Get absolute path of the original ZIP file
             $originalAbsolutePath = Storage::disk('local')->path($originalPath);
 
             if (!file_exists($originalAbsolutePath)) {
                 throw new \Exception("Original file not found: " . $originalAbsolutePath);
             }
 
+            // Extract the original file from the ZIP archive to a temporary file
+            $extractedAbsolutePath = $this->extractFromZip($originalAbsolutePath);
+
             if ($gallery->preview_type === 'image') {
-                $this->processImage($gallery, $originalAbsolutePath, $user_id, $uuid);
+                $this->processImage($gallery, $extractedAbsolutePath, $user_id, $uuid);
             } elseif ($gallery->preview_type === 'video') {
-                $this->processVideo($gallery, $originalAbsolutePath, $user_id, $uuid);
+                $this->processVideo($gallery, $extractedAbsolutePath, $user_id, $uuid);
             } elseif ($gallery->preview_type === 'office') {
-                $this->processOffice($gallery, $originalAbsolutePath, $user_id, $uuid);
+                $this->processOffice($gallery, $extractedAbsolutePath, $user_id, $uuid);
             } elseif ($gallery->preview_type === 'pdf') {
-                $this->processPdf($gallery, $originalAbsolutePath, $user_id, $uuid);
+                $this->processPdf($gallery, $extractedAbsolutePath, $user_id, $uuid);
             } else {
-                // If it's a type that doesn't need external conversion but was queued somehow
                 $gallery->update([
                     'conversion_status' => 'done',
                     'preview_ready_at' => now(),
@@ -75,10 +79,34 @@ class ProcessFilePreview implements ShouldQueue
         } catch (\Exception $e) {
             \Log::error("ProcessFilePreview Failed for Gallery ID {$this->galleryId}: " . $e->getMessage());
             $gallery->update(['conversion_status' => 'failed']);
+        } finally {
+            // Clean up the extracted raw file
+            if ($extractedAbsolutePath && file_exists($extractedAbsolutePath)) {
+                @unlink($extractedAbsolutePath);
+            }
         }
     }
 
-    private function processImage(Gallery $gallery, string $originalAbsolutePath, $user_id, $uuid)
+    /**
+     * Extract the raw file from the ZIP archive.
+     */
+    private function extractFromZip(string $zipAbsolutePath): string
+    {
+        $zip = new \ZipArchive();
+        if ($zip->open($zipAbsolutePath) === true) {
+            $tempDir = storage_path('app/temp');
+            if (!file_exists($tempDir)) {
+                mkdir($tempDir, 0777, true);
+            }
+            $fileNameInZip = $zip->getNameIndex(0);
+            $zip->extractTo($tempDir, $fileNameInZip);
+            $zip->close();
+            return $tempDir . DIRECTORY_SEPARATOR . $fileNameInZip;
+        }
+        throw new \Exception("Gagal membuka file ZIP: " . $zipAbsolutePath);
+    }
+
+    private function processImage(Gallery $gallery, string $extractedAbsolutePath, $user_id, $uuid)
     {
         try {
             $ext = strtolower($gallery->extension);
@@ -86,48 +114,63 @@ class ProcessFilePreview implements ShouldQueue
             
             if ($ext === 'svg' || $mime === 'image/svg+xml') {
                 $thumbnailRelPath = "users/{$user_id}/thumbnails/{$uuid}.svg";
-                Storage::disk('public')->put($thumbnailRelPath, file_get_contents($originalAbsolutePath));
+                Storage::disk('public')->put($thumbnailRelPath, file_get_contents($extractedAbsolutePath));
+                
+                // Copy as preview
+                $previewRelPath = "users/{$user_id}/preview/{$uuid}.svg";
+                Storage::disk('local')->put($previewRelPath, file_get_contents($extractedAbsolutePath));
+
                 $gallery->update([
                     'thumbnail_path' => $thumbnailRelPath,
+                    'preview_path' => $previewRelPath,
+                    'preview_type' => 'image',
                     'conversion_status' => 'done',
                     'preview_ready_at' => now(),
                 ]);
                 return;
             }
 
-            // 3. THUMBNAIL (HYBRID APPROACH): Optional but recommended "public" for thumbnails for performance.
-            // I will use disk('public') for thumbnails.
-            $thumbnailRelPath = "users/{$user_id}/thumbnails/{$uuid}.webp";
-            // Intervention image processing using memory
+            // Create compressed lossy version (WebP) for viewing
+            $previewRelPath = "users/{$user_id}/preview/{$uuid}.webp";
+            Storage::disk('local')->makeDirectory("users/{$user_id}/preview");
+            
             $manager = new ImageManager(new Driver());
-            // Read file
-            $image = $manager->decodePath($originalAbsolutePath);
+            $image = $manager->decodePath($extractedAbsolutePath);
             
-            // Resize down if wider than 300px
-            $image->scaleDown(width: 300);
+            // Downscale to max 1200px width/height for fast web loading
+            if ($image->width() > 1200 || $image->height() > 1200) {
+                $image->scaleDown(width: 1200, height: 1200);
+            }
 
-            // Encode to webp
-            $encoded = $image->encodeUsingFileExtension('webp');
-            
-            // Save to public disk
-            Storage::disk('public')->put($thumbnailRelPath, $encoded->toString());
+            // Encode to webp at 45% quality (highly lossy compression)
+            $encoded = $image->encodeUsingFileExtension('webp', 45);
+            Storage::disk('local')->put($previewRelPath, $encoded->toString());
+
+            // Create thumbnail for file manager UI grids
+            $thumbnailRelPath = "users/{$user_id}/thumbnails/{$uuid}.webp";
+            Storage::disk('public')->makeDirectory("users/{$user_id}/thumbnails");
+
+            $thumbnailImage = $manager->decodePath($extractedAbsolutePath);
+            $thumbnailImage->scaleDown(width: 300);
+            $encodedThumb = $thumbnailImage->encodeUsingFileExtension('webp', 60);
+            Storage::disk('public')->put($thumbnailRelPath, $encodedThumb->toString());
 
             $gallery->update([
+                'preview_path' => $previewRelPath,
+                'preview_type' => 'image',
                 'thumbnail_path' => $thumbnailRelPath,
                 'conversion_status' => 'done',
                 'preview_ready_at' => now(),
             ]);
         } catch (\Exception $e) {
-            \Log::warning("processImage (thumbnail generation) failed for Gallery ID {$gallery->id}: " . $e->getMessage());
-            // Fallback: mark as done without thumbnail so that the image is still viewable
+            \Log::warning("processImage (preview/thumbnail generation) failed for Gallery ID {$gallery->id}: " . $e->getMessage());
             $gallery->update([
-                'conversion_status' => 'done',
-                'preview_ready_at' => now(),
+                'conversion_status' => 'failed',
             ]);
         }
     }
 
-    private function processVideo(Gallery $gallery, string $originalAbsolutePath, $user_id, $uuid)
+    private function processVideo(Gallery $gallery, string $extractedAbsolutePath, $user_id, $uuid)
     {
         $ffmpegPath = env('FFMPEG_PATH', 'ffmpeg');
         
@@ -142,7 +185,7 @@ class ProcessFilePreview implements ShouldQueue
         $process = new Process([
             $ffmpegPath, 
             '-y', 
-            '-i', $originalAbsolutePath, 
+            '-i', $extractedAbsolutePath, 
             '-ss', '00:00:01.000', 
             '-vframes', '1', 
             $thumbnailAbsolutePath
@@ -154,6 +197,8 @@ class ProcessFilePreview implements ShouldQueue
             throw new ProcessFailedException($process);
         }
 
+        // For video, preview path is just the original ZIP extraction, or we can stream the preview directly
+        // Usually videos can stream or we can keep it without a compressed version for now
         $gallery->update([
             'thumbnail_path' => $thumbnailRelPath,
             'conversion_status' => 'done',
@@ -161,24 +206,23 @@ class ProcessFilePreview implements ShouldQueue
         ]);
     }
 
-    private function processOffice(Gallery $gallery, string $originalAbsolutePath, $user_id, $uuid)
+    private function processOffice(Gallery $gallery, string $extractedAbsolutePath, $user_id, $uuid)
     {
         $libreOfficePath = env('LIBREOFFICE_PATH', 'soffice');
         
-        // Converted path to local disk
-        $convertedRelPath = "users/{$user_id}/converted/{$uuid}.pdf";
-        $convertedAbsoluteDir = Storage::disk('local')->path("users/{$user_id}/converted");
+        $previewRelPath = "users/{$user_id}/preview/{$uuid}.pdf";
+        $previewAbsoluteDir = Storage::disk('local')->path("users/{$user_id}/preview");
         
         // Ensure directory exists in local storage
-        Storage::disk('local')->makeDirectory("users/{$user_id}/converted");
+        Storage::disk('local')->makeDirectory("users/{$user_id}/preview");
 
-        // Command: soffice --headless --convert-to pdf --outdir /path/to/converted /path/to/input.docx
+        // Command: soffice --headless --convert-to pdf --outdir /path/to/preview /path/to/input.docx
         $process = new Process([
             $libreOfficePath,
             '--headless',
             '--convert-to', 'pdf',
-            '--outdir', $convertedAbsoluteDir,
-            $originalAbsolutePath
+            '--outdir', $previewAbsoluteDir,
+            $extractedAbsolutePath
         ]);
         
         $process->setTimeout($this->timeout);
@@ -188,75 +232,109 @@ class ProcessFilePreview implements ShouldQueue
             throw new ProcessFailedException($process);
         }
 
+        // Rename the resulting converted PDF to {uuid}.pdf
+        $extractedFileName = basename($extractedAbsolutePath);
+        $outputPdfName = pathinfo($extractedFileName, PATHINFO_FILENAME) . '.pdf';
+        $outputPdfPath = $previewAbsoluteDir . DIRECTORY_SEPARATOR . $outputPdfName;
+        $finalPdfPath = $previewAbsoluteDir . DIRECTORY_SEPARATOR . $uuid . '.pdf';
+
+        if (file_exists($outputPdfPath) && $outputPdfPath !== $finalPdfPath) {
+            rename($outputPdfPath, $finalPdfPath);
+        }
+
+        // Generate thumbnail for the first page
+        $this->generatePdfThumbnail($finalPdfPath, $user_id, $uuid);
+
         $gallery->update([
-            'preview_path' => $convertedRelPath,
-            'preview_type' => 'pdf', // It's now a PDF
+            'preview_path' => $previewRelPath,
+            'preview_type' => 'pdf',
             'conversion_status' => 'done',
             'preview_ready_at' => now(),
         ]);
     }
 
-    private function processPdf(Gallery $gallery, string $originalAbsolutePath, $user_id, $uuid)
+    private function processPdf(Gallery $gallery, string $extractedAbsolutePath, $user_id, $uuid)
     {
-        // Cross-platform binary detection
-        $popplerPath = env('POPPLER_PATH');
-        
-        if (!$popplerPath) {
-            if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-                // Windows portable fallback
-                $popplerPath = base_path('bin' . DIRECTORY_SEPARATOR . 'poppler' . DIRECTORY_SEPARATOR . 'poppler-24.02.0' . DIRECTORY_SEPARATOR . 'Library' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'pdftocairo.exe');
-            } else {
-                // Linux system fallback
-                $popplerPath = 'pdftocairo';
-            }
-        }
-        
-        // Final check for binary existence if it's a relative/absolute path
-        if (str_contains($popplerPath, DIRECTORY_SEPARATOR) && !file_exists($popplerPath)) {
-            \Log::warning("Poppler binary not found at: " . $popplerPath);
-            $gallery->update([
-                'conversion_status' => 'done',
-                'preview_ready_at' => now(),
-            ]);
-            return;
-        }
+        $previewRelPath = "users/{$user_id}/preview/{$uuid}.pdf";
+        $previewAbsolutePath = Storage::disk('local')->path($previewRelPath);
+        Storage::disk('local')->makeDirectory("users/{$user_id}/preview");
 
-        // Thumbnail path to public disk
-        $thumbnailRelPath = "users/{$user_id}/thumbnails/{$uuid}.jpg";
-        $thumbnailAbsolutePrefix = Storage::disk('public')->path("users/{$user_id}/thumbnails/{$uuid}");
-        
-        // Ensure directory exists
-        Storage::disk('public')->makeDirectory("users/{$user_id}/thumbnails");
-
-        // Command: pdftocairo -jpeg -singlefile -f 1 -l 1 -scale-to 400 input.pdf output_prefix
+        // Compress the PDF using Ghostscript if available
+        $gsPath = env('GS_PATH', 'gs');
         $process = new Process([
-            $popplerPath,
-            '-jpeg',
-            '-singlefile',
-            '-f', '1',
-            '-l', '1',
-            '-scale-to', '400',
-            $originalAbsolutePath,
-            $thumbnailAbsolutePrefix
+            $gsPath,
+            '-sDEVICE=pdfwrite',
+            '-dCompatibilityLevel=1.4',
+            '-dPDFSETTINGS=/screen', // Web-optimized low-res (72 dpi)
+            '-dNOPAUSE',
+            '-dQUIET',
+            '-dBATCH',
+            '-sOutputFile=' . $previewAbsolutePath,
+            $extractedAbsolutePath
         ]);
-        $process->setTimeout($this->timeout);
-        
+        $process->run();
+
+        // Fallback: if GS is not found or fails, copy the file directly
+        if (!$process->isSuccessful() || !file_exists($previewAbsolutePath) || filesize($previewAbsolutePath) === 0) {
+            copy($extractedAbsolutePath, $previewAbsolutePath);
+        }
+
+        // Generate a thumbnail image for the PDF first page
+        $this->generatePdfThumbnail($previewAbsolutePath, $user_id, $uuid);
+
+        $gallery->update([
+            'preview_path' => $previewRelPath,
+            'preview_type' => 'pdf',
+            'conversion_status' => 'done',
+            'preview_ready_at' => now(),
+        ]);
+    }
+
+    /**
+     * Helper to render the first page of a PDF as a thumbnail image.
+     */
+    private function generatePdfThumbnail(string $pdfAbsolutePath, $user_id, $uuid)
+    {
         try {
+            $popplerPath = env('POPPLER_PATH');
+            
+            if (!$popplerPath) {
+                if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+                    $popplerPath = base_path('bin' . DIRECTORY_SEPARATOR . 'poppler' . DIRECTORY_SEPARATOR . 'poppler-24.02.0' . DIRECTORY_SEPARATOR . 'Library' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'pdftocairo.exe');
+                } else {
+                    $popplerPath = 'pdftocairo';
+                }
+            }
+            
+            if (str_contains($popplerPath, DIRECTORY_SEPARATOR) && !file_exists($popplerPath)) {
+                return;
+            }
+
+            $thumbnailRelPath = "users/{$user_id}/thumbnails/{$uuid}.jpg";
+            $thumbnailAbsolutePrefix = Storage::disk('public')->path("users/{$user_id}/thumbnails/{$uuid}");
+            Storage::disk('public')->makeDirectory("users/{$user_id}/thumbnails");
+
+            // Command: pdftocairo -jpeg -singlefile -f 1 -l 1 -scale-to 400 input.pdf output_prefix
+            $process = new Process([
+                $popplerPath,
+                '-jpeg',
+                '-singlefile',
+                '-f', '1',
+                '-l', '1',
+                '-scale-to', '400',
+                $pdfAbsolutePath,
+                $thumbnailAbsolutePrefix
+            ]);
             $process->run();
 
-            if (!$process->isSuccessful()) {
-                throw new ProcessFailedException($process);
+            if ($process->isSuccessful()) {
+                $gallery = Gallery::where('file', 'LIKE', $uuid . '%')->first();
+                if ($gallery) {
+                    $gallery->update(['thumbnail_path' => $thumbnailRelPath]);
+                }
             }
-
-            $gallery->update([
-                'thumbnail_path' => $thumbnailRelPath,
-                'conversion_status' => 'done',
-                'preview_ready_at' => now(),
-            ]);
         } catch (\Exception $e) {
-            \Log::error("pdftocairo execution failed: " . $e->getMessage());
-            // Fallback: mark as done without thumbnail to avoid stuck processing
-            $gallery->update(['conversion_status' => 'done']);
+            \Log::warning("generatePdfThumbnail execution failed: " . $e->getMessage());
         }
     }
 }

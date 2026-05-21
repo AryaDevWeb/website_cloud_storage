@@ -24,12 +24,28 @@ class FileController extends Controller
         $sort     = $request->query('sort', 'name');
         $perPage  = (int) $request->query('per_page', 20);
 
-        $query = $user->galleries()->whereNull('deleted_at');
+        $accessibleFolderIds = \App\Services\RbacScopeService::getAccessibleFolderIds($user);
+
+        $query = Gallery::whereNull('deleted_at');
 
         if ($q) {
-            $query->where('nama_tampilan', 'LIKE', "%{$q}%");
+            $query->where(function($sq) use ($user, $accessibleFolderIds) {
+                $sq->where('user_id', $user->id)
+                  ->orWhereIn('folder_id', $accessibleFolderIds);
+            })->where('nama_tampilan', 'LIKE', "%{$q}%");
         } else {
-            $query->where('folder_id', $folderId);
+            if ($folderId) {
+                $targetFolder = Folder::findOrFail($folderId);
+                if (!\App\Services\RbacScopeService::canAccessFolder($user, $targetFolder)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Unauthorized.',
+                    ], 403);
+                }
+                $query->where('folder_id', $folderId);
+            } else {
+                $query->whereNull('folder_id')->where('user_id', $user->id);
+            }
         }
 
         $files = $query->orderBy(
@@ -68,8 +84,25 @@ class FileController extends Controller
         $user     = $request->user();
         $file     = $request->file('file');
         $fileSize = $file->getSize();
+        $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension());
 
-        if (($user->storage_used + $fileSize) > $user->storage_quota) {
+        // Exclude restrictions: Block .exe, .iso
+        if (in_array($extension, ['exe', 'iso'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ekstensi file .exe dan .iso diblokir untuk alasan keamanan.',
+            ], 422);
+        }
+
+        // Block .mp4 > 50 MB
+        if ($extension === 'mp4' && $fileSize > (50 * 1024 * 1024)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'File MP4 tidak boleh lebih dari 50 MB.',
+            ], 422);
+        }
+
+        if (($user->storage_used_bytes + $fileSize) > $user->storage_limit_bytes) {
             return response()->json([
                 'success' => false,
                 'message' => 'Storage quota exceeded.',
@@ -77,26 +110,50 @@ class FileController extends Controller
         }
 
         $folderId    = $this->resolveId($request->input('folder_id'));
+        if ($folderId) {
+            $targetFolder = Folder::findOrFail($folderId);
+            if (!\App\Services\RbacScopeService::canWriteFolder($user, $targetFolder)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda tidak memiliki akses menulis di folder ini.',
+                ], 403);
+            }
+        }
         
         $mime_type = $file->getMimeType();
-        $extension = $file->getClientOriginalExtension() ?: $file->extension();
         
-        // SECURITY: Gunakan UUID untuk storage, nama asli untuk display
-        $safeName = \Illuminate\Support\Str::uuid()->toString() . '.' . $extension;
+        $uuid = \Illuminate\Support\Str::uuid()->toString();
+        $safeName = $uuid . '.zip';
         $displayName = basename($file->getClientOriginalName());
 
         $storagePath = "users/{$user->id}/original";
+        Storage::disk('local')->makeDirectory($storagePath);
 
-        // Simpan dengan nama UUID ke local storage
-        Storage::disk('local')->putFileAs($storagePath, $file, $safeName);
+        // Create ZIP archive containing the original file
+        $tempZipPath = tempnam(sys_get_temp_dir(), 'zip');
+        $zip = new \ZipArchive();
+        if ($zip->open($tempZipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
+            $zip->addFile($file->getRealPath(), $displayName);
+            $zip->close();
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengompresi file ke ZIP.',
+            ], 500);
+        }
+
+        $compressedSize = filesize($tempZipPath);
+
+        // Store ZIP in local storage
+        Storage::disk('local')->putFileAs($storagePath, new \Illuminate\Http\File($tempZipPath), $safeName);
+        @unlink($tempZipPath);
         
-        // Build full path untuk database
         $fullPath = $storagePath . '/' . $safeName;
 
         $preview_type = $this->mapPreviewType($extension);
         
         // Determine initial conversion status
-        $needsConversion = in_array($preview_type, ['image', 'video', 'office']);
+        $needsConversion = in_array($preview_type, ['image', 'video', 'office', 'pdf']);
         $conversion_status = $needsConversion ? 'pending' : 'done';
 
         $gallery = Gallery::create([
@@ -105,6 +162,7 @@ class FileController extends Controller
             'file'          => $safeName,
             'nama_tampilan' => $displayName,
             'ukuran'        => $fileSize,
+            'compressed_size' => $compressedSize,
             'izin'          => 1,
             'path'          => $fullPath,
             'mime_type'     => $mime_type,
@@ -118,7 +176,7 @@ class FileController extends Controller
             \App\Jobs\ProcessFilePreview::dispatch($gallery->id);
         }
 
-        $user->increment('storage_used', $fileSize);
+        $user->increment('storage_used_bytes', $fileSize);
         Wallet::firstOrCreate(['user_id' => $user->id], ['koin' => 0])->increment('koin', 10);
 
         return response()->json([
@@ -134,7 +192,13 @@ class FileController extends Controller
      */
     public function show(Request $request, $id): JsonResponse
     {
-        $file = $request->user()->galleries()->findOrFail($id);
+        $file = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canAccessFile($request->user(), $file)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
 
         return response()->json([
             'success' => true,
@@ -150,7 +214,13 @@ class FileController extends Controller
     public function update(Request $request, $id): JsonResponse
     {
         $request->validate(['name' => 'required|string']);
-        $file = $request->user()->galleries()->findOrFail($id);
+        $file = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFile($request->user(), $file)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
         $file->update(['nama_tampilan' => ltrim($request->name, '/')]);
 
         return response()->json([
@@ -166,7 +236,13 @@ class FileController extends Controller
      */
     public function destroy(Request $request, $id): JsonResponse
     {
-        $file = $request->user()->galleries()->findOrFail($id);
+        $file = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFile($request->user(), $file)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
         $file->delete();
 
         return response()->json([
@@ -181,16 +257,43 @@ class FileController extends Controller
      */
     public function download(Request $request, $id)
     {
-        $file = $request->user()->galleries()->findOrFail($id);
+        $file = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canAccessFile($request->user(), $file)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
 
-        if (! Storage::disk('local')->exists($file->path)) {
+        $zipAbsolutePath = Storage::disk('local')->path($file->path);
+        if (!file_exists($zipAbsolutePath)) {
             return response()->json([
                 'success' => false,
                 'message' => 'File not found on storage.',
             ], 404);
         }
 
-        return Storage::disk('local')->download($file->path, $file->nama_tampilan);
+        $zip = new \ZipArchive();
+        if ($zip->open($zipAbsolutePath) === true) {
+            $fileNameInZip = $zip->getNameIndex(0);
+            $tempDir = storage_path('app/temp');
+            if (!file_exists($tempDir)) {
+                mkdir($tempDir, 0777, true);
+            }
+            $tempFilePath = $tempDir . DIRECTORY_SEPARATOR . \Illuminate\Support\Str::random(10) . '_' . $fileNameInZip;
+            
+            $zip->extractTo($tempDir, $fileNameInZip);
+            $extractedPath = $tempDir . DIRECTORY_SEPARATOR . $fileNameInZip;
+            rename($extractedPath, $tempFilePath);
+            $zip->close();
+
+            return response()->download($tempFilePath, $file->nama_tampilan)->deleteFileAfterSend(true);
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to open ZIP archive.',
+            ], 500);
+        }
     }
 
     /**
@@ -199,7 +302,13 @@ class FileController extends Controller
      */
     public function star(Request $request, $id): JsonResponse
     {
-        $file = $request->user()->galleries()->findOrFail($id);
+        $file = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canAccessFile($request->user(), $file)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
         $file->update(['starred' => ! $file->starred]);
 
         return response()->json([
@@ -215,7 +324,13 @@ class FileController extends Controller
      */
     public function share(Request $request, $id): JsonResponse
     {
-        $file = $request->user()->galleries()->findOrFail($id);
+        $file = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canAccessFile($request->user(), $file)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
 
         return response()->json([
             'success' => true,
@@ -232,11 +347,23 @@ class FileController extends Controller
     {
         $request->validate(['folder_id' => 'nullable|integer']);
         $user     = $request->user();
-        $file     = $user->galleries()->findOrFail($id);
+        $file     = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFile($user, $file)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
         $folderId = $this->resolveId($request->input('folder_id'));
 
         if ($folderId) {
-            $user->folders()->findOrFail($folderId); // ownership check
+            $destFolder = Folder::findOrFail($folderId);
+            if (!\App\Services\RbacScopeService::canWriteFolder($user, $destFolder)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda tidak memiliki akses menulis di folder tujuan.',
+                ], 403);
+            }
         }
 
         $file->update(['folder_id' => $folderId]);
@@ -254,7 +381,13 @@ class FileController extends Controller
      */
     public function restore(Request $request, $id): JsonResponse
     {
-        $file = $request->user()->galleries()->onlyTrashed()->findOrFail($id);
+        $file = Gallery::onlyTrashed()->findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFile($request->user(), $file)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
         $file->restore();
 
         return response()->json([
@@ -270,7 +403,13 @@ class FileController extends Controller
     public function forceDelete(Request $request, $id): JsonResponse
     {
         $user = $request->user();
-        $file = $user->galleries()->withTrashed()->findOrFail($id);
+        $file = Gallery::withTrashed()->findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFile($user, $file)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
 
         if (Storage::disk('local')->exists($file->path)) {
             Storage::disk('local')->delete($file->path);
@@ -284,7 +423,10 @@ class FileController extends Controller
             Storage::disk('public')->delete($file->thumbnail_path);
         }
 
-        $user->decrement('storage_used', $file->ukuran);
+        $fileOwner = $file->user;
+        if ($fileOwner) {
+            $fileOwner->decrement('storage_used_bytes', $file->ukuran);
+        }
         $file->forceDelete();
 
         return response()->json([
@@ -300,7 +442,13 @@ class FileController extends Controller
     public function permission(Request $request, $id): JsonResponse
     {
         $request->validate(['izin' => 'required|in:0,1']);
-        $file = $request->user()->galleries()->findOrFail($id);
+        $file = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFile($request->user(), $file)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
         $file->update(['izin' => $request->izin]);
 
         return response()->json([
@@ -314,20 +462,30 @@ class FileController extends Controller
 
     public function recent(Request $request): JsonResponse
     {
-        $files = $request->user()->galleries()
+        $user = $request->user();
+        $accessibleFolderIds = \App\Services\RbacScopeService::getAccessibleFolderIds($user);
+        $files = Gallery::where(function($q) use ($user, $accessibleFolderIds) {
+                $q->where('user_id', $user->id)
+                  ->orWhereIn('folder_id', $accessibleFolderIds);
+            })
             ->latest()
             ->take(30)
             ->get()
             ->map(fn ($f) => $this->mapFile($f));
 
-        return $this->paginatedResponse($files, 1, 1, 30);
+        return $this->paginatedResponse($files, 1, 1, $files->count());
     }
 
     public function starred(Request $request): JsonResponse
     {
+        $user = $request->user();
         $perPage = (int) $request->query('per_page', 20);
-        $files   = $request->user()->galleries()
-            ->where('starred', true)
+        $accessibleFolderIds = \App\Services\RbacScopeService::getAccessibleFolderIds($user);
+        $files = Gallery::where('starred', true)
+            ->where(function($q) use ($user, $accessibleFolderIds) {
+                $q->where('user_id', $user->id)
+                  ->orWhereIn('folder_id', $accessibleFolderIds);
+            })
             ->latest()
             ->paginate($perPage);
 
@@ -346,8 +504,13 @@ class FileController extends Controller
 
     public function shared(Request $request): JsonResponse
     {
-        $files = $request->user()->galleries()
-            ->where('izin', 1)
+        $user = $request->user();
+        $accessibleFolderIds = \App\Services\RbacScopeService::getAccessibleFolderIds($user);
+        $files = Gallery::where('user_id', '!=', $user->id)
+            ->where(function($q) use ($accessibleFolderIds) {
+                $q->where('izin', 1)
+                  ->orWhereIn('folder_id', $accessibleFolderIds);
+            })
             ->latest()
             ->get()
             ->map(fn ($f) => $this->mapFile($f));

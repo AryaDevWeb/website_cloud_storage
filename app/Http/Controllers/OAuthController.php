@@ -46,8 +46,8 @@ class OAuthController extends Controller
                         'email' => $googleUser->email,
                         'google_id' => $googleUser->id,
                         'avatar' => $googleUser->avatar,
-                        'storage_quota' => 1 * 1024 * 1024 * 1024, // 1 GB default
-                        'storage_used' => 0,
+                        'storage_limit_bytes' => 1 * 1024 * 1024 * 1024, // 1 GB default
+                        'storage_used_bytes' => 0,
                     ]);
                 }
             }

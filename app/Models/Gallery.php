@@ -9,6 +9,9 @@ class Gallery extends Model
 {
     use SoftDeletes;
 
+    // Explicitly point to the renamed 'files' database table
+    protected $table = 'files';
+
     protected $fillable = [
         'user_id',
         'folder_id',
@@ -16,6 +19,7 @@ class Gallery extends Model
         'izin',
         'nama_tampilan',
         'ukuran',
+        'compressed_size',
         'path',
         'riwayat',
         'starred',
@@ -33,6 +37,8 @@ class Gallery extends Model
         'riwayat' => 'datetime',
         'starred' => 'boolean',
         'izin'    => 'integer',
+        'ukuran'  => 'integer',
+        'compressed_size' => 'integer',
     ];
 
     public function getUkuranFormatAttribute(): string

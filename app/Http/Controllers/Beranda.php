@@ -81,81 +81,111 @@ class Beranda extends Controller
     public function akun($id)
     {
         $user = User::findOrFail($id);
-        $folders = $user->folders()->whereNull('parent_id')->get();
-        $file = $user->galleries()->whereNull('folder_id')->get();
+        $folders = \App\Services\RbacScopeService::getRootFolders($user)->get();
+        $file = Gallery::whereNull('folder_id')->whereNull('deleted_at')->where('user_id', $user->id)->get();
 
         return view('beranda', compact('user', 'folders', 'file'));
     }
 
-        public function upload(Request $request)
-        {
-            $request->validate([
-                'upload' => 'required|file|mimes:jpg,jpeg,png,gif,svg,webp,pdf,mp4,webm,mov,avi,mp3,wav,ogg,flac,txt,md,json,doc,docx,xls,xlsx,ppt,pptx|max:102400',
-                'folder_id' => ['nullable', Rule::exists('folders', 'id')->where('user_id', auth()->id())],
+    public function upload(Request $request)
+    {
+        $request->validate([
+            'upload' => 'required|file|mimes:jpg,jpeg,png,gif,svg,webp,pdf,mp4,webm,mov,avi,mp3,wav,ogg,flac,txt,md,json,doc,docx,xls,xlsx,ppt,pptx|max:102400',
+            'folder_id' => 'nullable|exists:folders,id',
+        ]);
+
+        if ($request->hasFile('upload')) {
+            $file = $request->file('upload');
+            $fileSize = $file->getSize();
+            $user = auth()->user();
+            $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension());
+
+            // Exclude restrictions: Block .exe, .iso
+            if (in_array($extension, ['exe', 'iso'])) {
+                return back()->with('error', 'Ekstensi file .exe dan .iso diblokir untuk alasan keamanan.');
+            }
+
+            // Block .mp4 > 50 MB
+            if ($extension === 'mp4' && $fileSize > (50 * 1024 * 1024)) {
+                return back()->with('error', 'File MP4 tidak boleh lebih dari 50 MB.');
+            }
+
+            // Check if user has enough storage
+            if (($user->storage_used_bytes + $fileSize) > $user->storage_limit_bytes) {
+                return back()->with('error', 'Penyimpanan Anda penuh! Sisa ruang: ' . number_format(($user->storage_limit_bytes - $user->storage_used_bytes) / 1024 / 1024, 2) . ' MB');
+            }
+
+            $uuid = \Illuminate\Support\Str::uuid()->toString();
+            $safeName = $uuid . '.zip';
+            $displayName = $this->sanitizeDisplayName($file);
+            
+            $folder_id = $request->input('folder_id');
+            if ($folder_id) {
+                $targetFolder = Folder::findOrFail($folder_id);
+                if (!\App\Services\RbacScopeService::canWriteFolder($user, $targetFolder)) {
+                    return back()->with('error', 'Anda tidak memiliki akses menulis di folder ini.');
+                }
+            }
+            $user_id = $user->id;
+
+            $mime_type = $file->getMimeType();
+
+            $storage_path = "users/{$user_id}/original";
+            Storage::disk('local')->makeDirectory($storage_path);
+
+            // Create ZIP archive containing the original file
+            $tempZipPath = tempnam(sys_get_temp_dir(), 'zip');
+            $zip = new \ZipArchive();
+            if ($zip->open($tempZipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
+                $zip->addFile($file->getRealPath(), $displayName);
+                $zip->close();
+            } else {
+                return back()->with('error', 'Gagal mengompresi file ke ZIP.');
+            }
+
+            $compressedSize = filesize($tempZipPath);
+
+            // Store ZIP in local storage
+            Storage::disk('local')->putFileAs($storage_path, new \Illuminate\Http\File($tempZipPath), $safeName);
+            @unlink($tempZipPath);
+            
+            $fullPath = $storage_path . '/' . $safeName;
+
+            $preview_type = $this->mapPreviewType($extension);
+            
+            // Determine initial conversion status
+            $needsConversion = in_array($preview_type, ['image', 'video', 'office', 'pdf']);
+            $conversion_status = $needsConversion ? 'pending' : 'done';
+
+            $gallery = Gallery::create([
+                'user_id' => $user_id,
+                'folder_id' => $folder_id,
+                'file' => $safeName,
+                'nama_tampilan' => $displayName,
+                'ukuran' => $fileSize,
+                'compressed_size' => $compressedSize,
+                'izin' => 1,
+                'path' => $fullPath,
+                'mime_type' => $mime_type,
+                'extension' => $extension,
+                'preview_type' => $preview_type,
+                'conversion_status' => $conversion_status,
+                'riwayat' => now()
             ]);
 
-            if ($request->hasFile('upload')) {
-                $file = $request->file('upload');
-                $fileSize = $file->getSize();
-                $user = auth()->user();
-
-                // Check if user has enough storage
-                if (($user->storage_used + $fileSize) > $user->storage_quota) {
-                    return back()->with('error', 'Penyimpanan Anda penuh! Sisa ruang: ' . number_format(($user->storage_quota - $user->storage_used) / 1024 / 1024, 2) . ' MB');
-                }
-
-                // SECURITY: Gunakan UUID untuk nama file storage, nama asli untuk display
-                $safeName = $this->generateSafeFilename($file);
-                $displayName = $this->sanitizeDisplayName($file);
-                
-                $folder_id = $request->input('folder_id');
-                $user_id = $user->id;
-
-                $mime_type = $file->getMimeType();
-                $extension = $file->getClientOriginalExtension() ?: $file->extension();
-
-                $storage_path = "users/{$user_id}/original";
-
-                // Simpan file dengan nama UUID ke local storage
-                Storage::disk('local')->putFileAs($storage_path, $file, $safeName);
-                
-                // Build full path untuk database
-                $fullPath = $storage_path . '/' . $safeName;
-
-                $preview_type = $this->mapPreviewType($extension);
-                
-                // Determine initial conversion status
-                $needsConversion = in_array($preview_type, ['image', 'video', 'office', 'pdf']);
-                $conversion_status = $needsConversion ? 'pending' : 'done';
-
-                $gallery = Gallery::create([
-                    'user_id' => $user_id,
-                    'folder_id' => $folder_id,
-                    'file' => $safeName,
-                    'nama_tampilan' => $displayName,
-                    'ukuran' => $fileSize,
-                    'izin' => 1,
-                    'path' => $fullPath,
-                    'mime_type' => $mime_type,
-                    'extension' => $extension,
-                    'preview_type' => $preview_type,
-                    'conversion_status' => $conversion_status,
-                    'riwayat' => now()
-                ]);
-
-                if ($needsConversion) {
-                    \App\Jobs\ProcessFilePreview::dispatch($gallery->id);
-                }
-
-                // Update storage used
-                $user->increment('storage_used', $fileSize);
-
-                Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
-
-                return back()->with('nama_tampil', $displayName);
+            if ($needsConversion) {
+                \App\Jobs\ProcessFilePreview::dispatch($gallery->id);
             }
-            return back()->with('error', 'Gagal upload file');
+
+            // Update storage used
+            $user->increment('storage_used_bytes', $fileSize);
+
+            Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
+
+            return back()->with('nama_tampil', $displayName);
         }
+        return back()->with('error', 'Gagal upload file');
+    }
 
     public function hapus_file($id)
     {
@@ -175,7 +205,7 @@ class Beranda extends Controller
                 'required',
                 'min:3',
                 Rule::unique('folders', 'nama_folder')->where(function ($query) use ($request) {
-                    return $query->where('user_id', auth()->id())->where('parent_id', $request->parent_id);
+                    return $query->where('parent_id', $request->parent_id);
                 })
             ],
             'parent_id' => 'nullable|exists:folders,id'
@@ -185,6 +215,13 @@ class Beranda extends Controller
         $user_id = $user->id;
         $nama_folder = $request->nama; // Allow spaces
         $parent_id = $request->parent_id;
+
+        if ($parent_id) {
+            $parentFolder = Folder::findOrFail($parent_id);
+            if (!\App\Services\RbacScopeService::canWriteFolder($user, $parentFolder)) {
+                return back()->with('error', 'Anda tidak memiliki akses menulis di folder ini.');
+            }
+        }
 
         Folder::create([
             'nama_folder' => $nama_folder,
@@ -201,14 +238,17 @@ class Beranda extends Controller
 
     public function new_folder($id)
     {
-        // Enforce ownership and exclude TRASHED folders
-        $isi_folder = auth()->user()->folders()->with(['children', 'user', 'files'])->findOrFail($id);
+        $isi_folder = Folder::with(['children' => function($q) {
+            $q->whereNull('deleted_at');
+        }, 'user', 'files' => function($q) {
+            $q->whereNull('deleted_at');
+        }])->findOrFail($id);
         
         if ($isi_folder->trashed()) {
             abort(404, 'Folder is in Trash');
         }
 
-        if ($isi_folder->permission == 0 && $isi_folder->user_id != auth()->id()) {
+        if (!\App\Services\RbacScopeService::canAccessFolder(auth()->user(), $isi_folder)) {
             abort(403, 'Maaf Anda tidak memiliki izin');
         }
 
@@ -221,11 +261,24 @@ class Beranda extends Controller
         $user = auth()->user();
 
         if ($kunci) {
-            $folders = $user->folders()->where('nama_folder', 'LIKE', '%' . $kunci . '%')->get();
-            $files = $user->galleries()->where('nama_tampilan', 'LIKE', '%' . $kunci . '%')->get();
+            $accessibleFolderIds = \App\Services\RbacScopeService::getAccessibleFolderIds($user);
+            $folders = Folder::whereIn('id', $accessibleFolderIds)
+                ->where('nama_folder', 'LIKE', '%' . $kunci . '%')
+                ->whereNull('deleted_at')
+                ->get();
+            $files = Gallery::where(function($q) use ($user, $accessibleFolderIds) {
+                    $q->where('user_id', $user->id)
+                      ->orWhereIn('folder_id', $accessibleFolderIds);
+                })
+                ->where('nama_tampilan', 'LIKE', '%' . $kunci . '%')
+                ->whereNull('deleted_at')
+                ->get();
         } else {
-            $folders = $user->folders()->whereNull('parent_id')->get();
-            $files = $user->galleries()->whereNull('folder_id')->get();
+            $folders = \App\Services\RbacScopeService::getRootFolders($user)->get();
+            $files = Gallery::whereNull('folder_id')
+                ->where('user_id', $user->id)
+                ->whereNull('deleted_at')
+                ->get();
         }
 
         return view('beranda', compact('user', 'folders', 'files'));
@@ -234,7 +287,11 @@ class Beranda extends Controller
     public function hapus_folder($id)
     {
         $user = auth()->user();
-        $folder = $user->folders()->findOrFail($id);
+        $folder = Folder::findOrFail($id);
+
+        if (!\App\Services\RbacScopeService::canWriteFolder($user, $folder)) {
+            abort(403, 'Unauthorized.');
+        }
 
         // Soft delete recursively
         $this->trashFolderAndContents($folder);
@@ -258,13 +315,19 @@ class Beranda extends Controller
 
     public function izin_file($id)
     {
-        $isi_file = auth()->user()->galleries()->findOrFail($id);
+        $isi_file = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFile(auth()->user(), $isi_file)) {
+            abort(403, 'Unauthorized.');
+        }
         return view('permission', compact('isi_file'));
     }
 
     public function ubah_izin(Request $request, $id)
     {
-        $file = auth()->user()->galleries()->findOrFail($id);
+        $file = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFile(auth()->user(), $file)) {
+            abort(403, 'Unauthorized.');
+        }
         $request->validate(['izin' => 'required|in:0,1']);
 
         // Simplified: Permission is now handled by application-level scoping, not on-disk encryption.
@@ -275,13 +338,19 @@ class Beranda extends Controller
 
     public function masuk_izin($id)
     {
-        $izin_folder = auth()->user()->folders()->findOrFail($id);
+        $izin_folder = Folder::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFolder(auth()->user(), $izin_folder)) {
+            abort(403, 'Unauthorized.');
+        }
         return view('izin_folder', compact('izin_folder'));
     }
 
     public function folder_permission(Request $request, $id)
     {
-        $folder = auth()->user()->folders()->findOrFail($id);
+        $folder = Folder::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFolder(auth()->user(), $folder)) {
+            abort(403, 'Unauthorized.');
+        }
         $request->validate(['izin' => 'required|in:0,1']);
         $folder->update(['permission' => $request->izin]);
 
@@ -329,26 +398,51 @@ class Beranda extends Controller
         $user = auth()->user();
         
         // SECURITY: Hardened access layer - filter by user_id + izin + exclude trashed
-        $file = Gallery::whereNull('deleted_at')
-            ->where(function ($q) use ($user) {
-                $q->where('user_id', $user->id)
-                  ->orWhere('izin', 1);
-            })
-            ->findOrFail($id);
+        $file = Gallery::whereNull('deleted_at')->findOrFail($id);
+        if (!\App\Services\RbacScopeService::canAccessFile($user, $file)) {
+            abort(403, 'Unauthorized.');
+        }
         
-        // Gunakan path dari database, jangan reconstruct
-        return Storage::disk('local')->download($file->path, $file->nama_tampilan);
+        $zipAbsolutePath = Storage::disk('local')->path($file->path);
+        if (!file_exists($zipAbsolutePath)) {
+            abort(404, 'File tidak ditemukan di penyimpanan.');
+        }
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipAbsolutePath) === true) {
+            $fileNameInZip = $zip->getNameIndex(0);
+            $tempDir = storage_path('app/temp');
+            if (!file_exists($tempDir)) {
+                mkdir($tempDir, 0777, true);
+            }
+            $tempFilePath = $tempDir . DIRECTORY_SEPARATOR . \Illuminate\Support\Str::random(10) . '_' . $fileNameInZip;
+            
+            $zip->extractTo($tempDir, $fileNameInZip);
+            $extractedPath = $tempDir . DIRECTORY_SEPARATOR . $fileNameInZip;
+            rename($extractedPath, $tempFilePath);
+            $zip->close();
+
+            return response()->download($tempFilePath, $file->nama_tampilan)->deleteFileAfterSend(true);
+        } else {
+            abort(500, 'Gagal membuka file arsip.');
+        }
     }
 
     public function pindah($id)
     {
-        $ubah_nama = auth()->user()->galleries()->findOrFail($id);
+        $ubah_nama = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFile(auth()->user(), $ubah_nama)) {
+            abort(403, 'Unauthorized.');
+        }
         return view('rename', compact('ubah_nama'));
     }
 
     public function rename(Request $request, $id)
     {
-        $file = auth()->user()->galleries()->findOrFail($id);
+        $file = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFile(auth()->user(), $file)) {
+            abort(403, 'Unauthorized.');
+        }
         $request->validate(['ubah_nama' => 'required']);
 
         $nama_baru = $request->ubah_nama;
@@ -359,13 +453,19 @@ class Beranda extends Controller
 
     public function pindah_rename($id)
     {
-        $cari_folder = auth()->user()->folders()->findOrFail($id);
+        $cari_folder = Folder::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFolder(auth()->user(), $cari_folder)) {
+            abort(403, 'Unauthorized.');
+        }
         return view('rename_folder', compact('cari_folder'));
     }
 
     public function rename_f(Request $request, $id)
     {
-        $folder = auth()->user()->folders()->findOrFail($id);
+        $folder = Folder::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFolder(auth()->user(), $folder)) {
+            abort(403, 'Unauthorized.');
+        }
         $request->validate(['rename' => 'required']);
 
         $nama_baru = $request->rename; // Allow spaces
@@ -439,13 +539,24 @@ class Beranda extends Controller
             $folderId = null;
         }
 
-        // SCOPE ALL QUERIES BY USER
-        $foldersQuery = $user->folders()->withCount(['children', 'files']);
-        $filesQuery = $user->galleries();
+        $accessibleFolderIds = \App\Services\RbacScopeService::getAccessibleFolderIds($user);
 
-        // ── VERIFY FOLDER OWNERSHIP ──────────────────────────
+        // SCOPE ALL QUERIES BY ACCESSIBLE FOLDERS OR OWNERSHIP
+        $foldersQuery = Folder::whereIn('id', $accessibleFolderIds)
+            ->with(['user'])
+            ->withCount(['children', 'files']);
+
+        $filesQuery = Gallery::where(function($sq) use ($user, $accessibleFolderIds) {
+            $sq->where('user_id', $user->id)
+              ->orWhereIn('folder_id', $accessibleFolderIds);
+        });
+
+        // ── VERIFY ACCESS TO THE TARGET FOLDER ──────────────────────────
         if ($folderId) {
-            $user->folders()->findOrFail($folderId); // 404 if not owned
+            $targetFolder = Folder::findOrFail($folderId);
+            if (!\App\Services\RbacScopeService::canAccessFolder($user, $targetFolder)) {
+                abort(403, 'Unauthorized.');
+            }
         }
 
         if ($q) {
@@ -456,19 +567,21 @@ class Beranda extends Controller
                 $foldersQuery->where('parent_id', $folderId);
                 $filesQuery->where('folder_id', $folderId);
             } else {
-                $foldersQuery->whereNull('parent_id');
-                $filesQuery->whereNull('folder_id');
+                // For root level, show root folders that are accessible and root files owned by user
+                $rootFolderIds = \App\Services\RbacScopeService::getRootFolders($user)->pluck('id')->toArray();
+                $foldersQuery->whereIn('id', $rootFolderIds);
+                $filesQuery->whereNull('folder_id')->where('user_id', $user->id);
             }
         }
 
-        $folders = $foldersQuery->get()->map(function($f) {
+        $folders = $foldersQuery->get()->map(function($f) use ($user) {
             return [
                 'id' => 'f' . $f->id,
                 'type' => 'folder',
                 'name' => $f->nama_folder,
                 'items' => $f->children_count + $f->files_count,
                 'modified' => $f->updated_at ? $f->updated_at->toIso8601String() : now()->toIso8601String(),
-                'owner' => 'You'
+                'owner' => $f->user_id === $user->id ? 'You' : ($f->user->name ?? 'Shared')
             ];
         });
 
@@ -503,7 +616,10 @@ class Beranda extends Controller
 
     public function getFileJson($id)
     {
-        $file = auth()->user()->galleries()->withTrashed()->findOrFail($id);
+        $file = Gallery::withTrashed()->findOrFail($id);
+        if (!\App\Services\RbacScopeService::canAccessFile(auth()->user(), $file)) {
+            abort(403, 'Unauthorized.');
+        }
         return response()->json($this->mapFile($file));
     }
 
@@ -522,9 +638,17 @@ class Beranda extends Controller
             $parent_id = null;
         }
 
-        $exists = $user->folders()
-            ->where('parent_id', $parent_id)
+        if ($parent_id) {
+            $parentFolder = Folder::findOrFail($parent_id);
+            if (!\App\Services\RbacScopeService::canWriteFolder($user, $parentFolder)) {
+                return response()->json(['message' => 'Anda tidak memiliki akses menulis di folder ini.'], 403);
+            }
+        }
+
+        // Master check for folder uniqueness in the same parent folder
+        $exists = Folder::where('parent_id', $parent_id)
             ->where('nama_folder', $nama_folder)
+            ->whereNull('deleted_at')
             ->exists();
             
         if ($exists) {
@@ -563,31 +687,61 @@ class Beranda extends Controller
             $file = $request->file('file');
             $fileSize = $file->getSize();
             $user = auth()->user();
+            $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension());
 
-            if (($user->storage_used + $fileSize) > $user->storage_quota) {
+            // Exclude restrictions: Block .exe, .iso
+            if (in_array($extension, ['exe', 'iso'])) {
+                return response()->json(['message' => 'Ekstensi file .exe dan .iso diblokir untuk alasan keamanan.'], 422);
+            }
+
+            // Block .mp4 > 50 MB
+            if ($extension === 'mp4' && $fileSize > (50 * 1024 * 1024)) {
+                return response()->json(['message' => 'File MP4 tidak boleh lebih dari 50 MB.'], 422);
+            }
+
+            if (($user->storage_used_bytes + $fileSize) > $user->storage_limit_bytes) {
                 return response()->json(['message' => 'Penyimpanan penuh'], 422);
             }
 
-            // SECURITY: Gunakan UUID untuk storage, nama asli untuk display
-            $safeName = $this->generateSafeFilename($file);
+            $uuid = \Illuminate\Support\Str::uuid()->toString();
+            $safeName = $uuid . '.zip';
             $displayName = $this->sanitizeDisplayName($file);
             
-            $folder_id = ltrim($request->input('folder_id'), 'f');
+            $folder_id = ltrim($request->input('folder_id') ?? '', 'f');
             if (empty($folder_id) || $folder_id === 'null' || $folder_id === 'undefined') {
                 $folder_id = null;
+            }
+
+            if ($folder_id) {
+                $targetFolder = Folder::findOrFail($folder_id);
+                if (!\App\Services\RbacScopeService::canWriteFolder($user, $targetFolder)) {
+                    return response()->json(['message' => 'Anda tidak memiliki akses menulis di folder ini.'], 403);
+                }
             }
 
             $user_id = $user->id;
 
             $mime_type = $file->getMimeType();
-            $extension = $file->getClientOriginalExtension() ?: $file->extension();
 
             $storage_path = "users/{$user_id}/original";
+            Storage::disk('local')->makeDirectory($storage_path);
 
-            // Simpan dengan nama UUID ke local storage
-            Storage::disk('local')->putFileAs($storage_path, $file, $safeName);
-            
-            // Build full path untuk database
+            // Create ZIP archive containing the original file
+            $tempZipPath = tempnam(sys_get_temp_dir(), 'zip');
+            $zip = new \ZipArchive();
+            if ($zip->open($tempZipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
+                $zip->addFile($file->getRealPath(), $displayName);
+                $zip->close();
+            } else {
+                return response()->json(['message' => 'Gagal mengompresi file ke ZIP.'], 500);
+            }
+
+            $compressedSize = filesize($tempZipPath);
+
+            // Store ZIP in local storage
+            Storage::disk('local')->putFileAs($storage_path, new \Illuminate\Http\File($tempZipPath), $safeName);
+            @unlink($tempZipPath);
+
             $fullPath = $storage_path . '/' . $safeName;
 
             $preview_type = $this->mapPreviewType($extension);
@@ -602,6 +756,7 @@ class Beranda extends Controller
                 'file' => $safeName,
                 'nama_tampilan' => $displayName,
                 'ukuran' => $fileSize,
+                'compressed_size' => $compressedSize,
                 'izin' => 1,
                 'path' => $fullPath,
                 'mime_type' => $mime_type,
@@ -615,7 +770,7 @@ class Beranda extends Controller
                 \App\Jobs\ProcessFilePreview::dispatch($gallery->id);
             }
 
-            $user->increment('storage_used', $fileSize);
+            $user->increment('storage_used_bytes', $fileSize);
             Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
 
             return response()->json([
@@ -646,7 +801,10 @@ class Beranda extends Controller
         $realId = ltrim($id, 'f');
 
         if ($isFolder) {
-            $folder = $user->folders()->findOrFail($realId);
+            $folder = Folder::findOrFail($realId);
+            if (!\App\Services\RbacScopeService::canWriteFolder($user, $folder)) {
+                return response()->json(['message' => 'Unauthorized.'], 403);
+            }
 
             $folder->update(['nama_folder' => $request->name]);
 
@@ -658,7 +816,10 @@ class Beranda extends Controller
                 'name' => $folder->nama_folder
             ]);
         } else {
-            $file = $user->galleries()->findOrFail($realId);
+            $file = Gallery::findOrFail($realId);
+            if (!\App\Services\RbacScopeService::canWriteFile($user, $file)) {
+                return response()->json(['message' => 'Unauthorized.'], 403);
+            }
             $file->update(['nama_tampilan' => ltrim($request->name, '/')]);
             return response()->json([
                 'id' => (string)$file->id,
@@ -675,10 +836,16 @@ class Beranda extends Controller
         $realId = ltrim($id, 'f');
 
         if ($isFolder) {
-            $folder = $user->folders()->findOrFail($realId);
+            $folder = Folder::findOrFail($realId);
+            if (!\App\Services\RbacScopeService::canWriteFolder($user, $folder)) {
+                return response()->json(['message' => 'Unauthorized.'], 403);
+            }
             $this->trashFolderAndContents($folder);
         } else {
-            $file = $user->galleries()->findOrFail($realId);
+            $file = Gallery::findOrFail($realId);
+            if (!\App\Services\RbacScopeService::canWriteFile($user, $file)) {
+                return response()->json(['message' => 'Unauthorized.'], 403);
+            }
             $file->delete();
             // Storage used is NOT recovered on soft delete
         }
@@ -689,8 +856,10 @@ class Beranda extends Controller
     public function shareAjax($id)
     {
         $realId = ltrim($id, 'f');
-        // Ensure user owns it
-        $file = auth()->user()->galleries()->findOrFail($realId);
+        $file = Gallery::findOrFail($realId);
+        if (!\App\Services\RbacScopeService::canAccessFile(auth()->user(), $file)) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
         return response()->json([
             'url' => url('/open_file/' . $file->id)
         ]);
@@ -710,21 +879,45 @@ class Beranda extends Controller
     public function recentFiles()
     {
         $user = auth()->user();
-        $files = $user->galleries()->latest()->take(30)->get()->map(fn($f) => $this->mapFile($f));
+        $accessibleFolderIds = \App\Services\RbacScopeService::getAccessibleFolderIds($user);
+        $files = Gallery::where(function($q) use ($user, $accessibleFolderIds) {
+                $q->where('user_id', $user->id)
+                  ->orWhereIn('folder_id', $accessibleFolderIds);
+            })
+            ->latest()
+            ->take(30)
+            ->get()
+            ->map(fn($f) => $this->mapFile($f));
         return response()->json(['data' => $files, 'total' => $files->count(), 'page' => 1, 'perPage' => 30, 'lastPage' => 1]);
     }
 
     public function starredFiles()
     {
         $user = auth()->user();
-        $files = $user->galleries()->where('starred', true)->latest()->get()->map(fn($f) => $this->mapFile($f));
+        $accessibleFolderIds = \App\Services\RbacScopeService::getAccessibleFolderIds($user);
+        $files = Gallery::where('starred', true)
+            ->where(function($q) use ($user, $accessibleFolderIds) {
+                $q->where('user_id', $user->id)
+                  ->orWhereIn('folder_id', $accessibleFolderIds);
+            })
+            ->latest()
+            ->get()
+            ->map(fn($f) => $this->mapFile($f));
         return response()->json(['data' => $files, 'total' => $files->count(), 'page' => 1, 'perPage' => 100, 'lastPage' => 1]);
     }
 
     public function sharedFiles()
     {
         $user = auth()->user();
-        $files = $user->galleries()->where('izin', 1)->latest()->get()->map(fn($f) => $this->mapFile($f));
+        $accessibleFolderIds = \App\Services\RbacScopeService::getAccessibleFolderIds($user);
+        $files = Gallery::where('user_id', '!=', $user->id)
+            ->where(function($q) use ($accessibleFolderIds) {
+                $q->where('izin', 1)
+                  ->orWhereIn('folder_id', $accessibleFolderIds);
+            })
+            ->latest()
+            ->get()
+            ->map(fn($f) => $this->mapFile($f));
         return response()->json(['data' => $files, 'total' => $files->count(), 'page' => 1, 'perPage' => 100, 'lastPage' => 1]);
     }
 
@@ -776,7 +969,10 @@ class Beranda extends Controller
         if ($isFolder) {
             return response()->json(['message' => 'Folders cannot be starred'], 422);
         }
-        $file = auth()->user()->galleries()->findOrFail($id);
+        $file = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canAccessFile(auth()->user(), $file)) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
         $file->update(['starred' => !$file->starred]);
         return response()->json(['starred' => $file->starred]);
     }
@@ -791,9 +987,17 @@ class Beranda extends Controller
         $isFolder = str_starts_with($id, 'f');
         $realId = ltrim($id, 'f');
         if ($isFolder) {
-            $user->folders()->onlyTrashed()->findOrFail($realId)->restore();
+            $folder = Folder::onlyTrashed()->findOrFail($realId);
+            if (!\App\Services\RbacScopeService::canWriteFolder($user, $folder)) {
+                return response()->json(['message' => 'Unauthorized.'], 403);
+            }
+            $folder->restore();
         } else {
-            $user->galleries()->onlyTrashed()->findOrFail($realId)->restore();
+            $file = Gallery::onlyTrashed()->findOrFail($realId);
+            if (!\App\Services\RbacScopeService::canWriteFile($user, $file)) {
+                return response()->json(['message' => 'Unauthorized.'], 403);
+            }
+            $file->restore();
         }
         return response()->json(['success' => true]);
     }
@@ -809,18 +1013,27 @@ class Beranda extends Controller
         $realId = ltrim($id, 'f');
 
         if ($isFolder) {
-            $folder = $user->folders()->withTrashed()->findOrFail($realId);
+            $folder = Folder::withTrashed()->findOrFail($realId);
+            if (!\App\Services\RbacScopeService::canWriteFolder($user, $folder)) {
+                return response()->json(['message' => 'Unauthorized.'], 403);
+            }
             // RECURSIVE PERMANENT DELETE
             $this->permanentDeleteFolder($folder, $user);
         } else {
-            $file = $user->galleries()->withTrashed()->findOrFail($realId);
+            $file = Gallery::withTrashed()->findOrFail($realId);
+            if (!\App\Services\RbacScopeService::canWriteFile($user, $file)) {
+                return response()->json(['message' => 'Unauthorized.'], 403);
+            }
             if (Storage::disk('local')->exists($file->path)) Storage::disk('local')->delete($file->path);
             
             // Delete preview and thumbnail if they exist
             if ($file->preview_path && Storage::disk('local')->exists($file->preview_path)) Storage::disk('local')->delete($file->preview_path);
             if ($file->thumbnail_path && Storage::disk('public')->exists($file->thumbnail_path)) Storage::disk('public')->delete($file->thumbnail_path);
 
-            $user->decrement('storage_used', $file->ukuran);
+            $fileOwner = $file->user;
+            if ($fileOwner) {
+                $fileOwner->decrement('storage_used_bytes', $file->ukuran);
+            }
             $file->forceDelete();
         }
         return response()->json(['success' => true]);
@@ -833,7 +1046,10 @@ class Beranda extends Controller
             if ($file->preview_path && Storage::disk('local')->exists($file->preview_path)) Storage::disk('local')->delete($file->preview_path);
             if ($file->thumbnail_path && Storage::disk('public')->exists($file->thumbnail_path)) Storage::disk('public')->delete($file->thumbnail_path);
 
-            $user->decrement('storage_used', $file->ukuran);
+            $fileOwner = $file->user;
+            if ($fileOwner) {
+                $fileOwner->decrement('storage_used_bytes', $file->ukuran);
+            }
             $file->forceDelete();
         }
 
@@ -853,7 +1069,10 @@ class Beranda extends Controller
     {
         $user = auth()->user();
         $request->validate(['izin' => 'required|in:0,1']);
-        $file = $user->galleries()->findOrFail($id);
+        $file = Gallery::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFile($user, $file)) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
         $file->update(['izin' => $request->izin]);
         return response()->json([
             'izin' => $file->izin,
@@ -876,8 +1095,18 @@ class Beranda extends Controller
         $newFolderId = ltrim($request->folder_id ?? '', 'f');
         if (empty($newFolderId) || $newFolderId === 'null') $newFolderId = null;
 
+        if ($newFolderId) {
+            $destFolder = Folder::findOrFail($newFolderId);
+            if (!\App\Services\RbacScopeService::canWriteFolder($user, $destFolder)) {
+                return response()->json(['message' => 'Anda tidak memiliki akses menulis di folder tujuan.'], 403);
+            }
+        }
+
         if ($isMovingFolder) {
-            $folderToMove = $user->folders()->findOrFail($realId);
+            $folderToMove = Folder::findOrFail($realId);
+            if (!\App\Services\RbacScopeService::canWriteFolder($user, $folderToMove)) {
+                return response()->json(['message' => 'Unauthorized.'], 403);
+            }
 
             // ── CIRCULAR MOVE PREVENTION ──────────────────────
             if ($newFolderId) {
@@ -892,7 +1121,10 @@ class Beranda extends Controller
             $folderToMove->update(['parent_id' => $newFolderId]);
 
         } else {
-            $file = $user->galleries()->findOrFail($realId);
+            $file = Gallery::findOrFail($realId);
+            if (!\App\Services\RbacScopeService::canWriteFile($user, $file)) {
+                return response()->json(['message' => 'Unauthorized.'], 403);
+            }
             $file->update(['folder_id' => $newFolderId]);
         }
 
@@ -915,8 +1147,11 @@ class Beranda extends Controller
     public function folderTree()
     {
         $user = auth()->user();
-        // Exclude trashed folders
-        $folders = $user->folders()->whereNull('deleted_at')->select('id','nama_folder','parent_id')->get();
+        $accessibleFolderIds = \App\Services\RbacScopeService::getAccessibleFolderIds($user);
+        $folders = Folder::whereIn('id', $accessibleFolderIds)
+            ->whereNull('deleted_at')
+            ->select('id','nama_folder','parent_id')
+            ->get();
 
         $tree = $folders->map(fn($f) => [
             'id'        => 'f' . $f->id,
@@ -939,24 +1174,51 @@ class Beranda extends Controller
               ->orWhere('izin', 1);
         })->findOrFail($id);
 
-        $path = $file->path;
-
-        // If requesting preview version (e.g. PDF of a docx)
+        // If requesting preview version (e.g. WebP image or PDF of a docx)
         if ($request->query('source') === 'preview' && $file->preview_path) {
             $path = $file->preview_path;
+            if (!Storage::disk('local')->exists($path)) {
+                abort(404);
+            }
+            $fullPath = Storage::disk('local')->path($path);
+            $mime = Storage::disk('local')->mimeType($path);
+            return response()->file($fullPath, [
+                'Content-Type' => $mime,
+                'Content-Disposition' => 'inline; filename="' . basename($path) . '"'
+            ]);
         }
 
-        if (!Storage::disk('local')->exists($path)) {
+        // Serve original from ZIP archive
+        $zipPath = $file->path;
+        if (!Storage::disk('local')->exists($zipPath)) {
             abort(404);
         }
 
-        $fullPath = Storage::disk('local')->path($path);
-        $mime = Storage::disk('local')->mimeType($path);
+        $zipAbsolutePath = Storage::disk('local')->path($zipPath);
+        $zip = new \ZipArchive();
+        if ($zip->open($zipAbsolutePath) !== true) {
+            abort(500, 'Gagal membuka file arsip.');
+        }
 
-        return response()->file($fullPath, [
+        $fileNameInZip = $zip->getNameIndex(0);
+        $tempDir = storage_path('app/temp');
+        if (!file_exists($tempDir)) {
+            mkdir($tempDir, 0777, true);
+        }
+        $tempFilePath = $tempDir . DIRECTORY_SEPARATOR . \Illuminate\Support\Str::random(10) . '_' . $fileNameInZip;
+        $zip->extractTo($tempDir, $fileNameInZip);
+        $extractedPath = $tempDir . DIRECTORY_SEPARATOR . $fileNameInZip;
+        if ($extractedPath !== $tempFilePath) {
+            rename($extractedPath, $tempFilePath);
+        }
+        $zip->close();
+
+        $mime = $file->mime_type ?: mime_content_type($tempFilePath);
+
+        return response()->file($tempFilePath, [
             'Content-Type' => $mime,
-            'Content-Disposition' => 'inline; filename="' . basename($path) . '"'
-        ]);
+            'Content-Disposition' => 'inline; filename="' . $file->nama_tampilan . '"'
+        ])->deleteFileAfterSend(true);
     }
 
     public function pindah_sampah()

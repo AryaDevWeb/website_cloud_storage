@@ -90,7 +90,7 @@
                 <div class="w-full h-full flex items-center justify-center">
                     
                     @if($preview_type === 'image')
-                        <img src="/open_file_stream/{{ $file->id }}" 
+                        <img src="/open_file_stream/{{ $file->id }}{{ $file->preview_path ? '?source=preview' : '' }}" 
                              alt="{{ $file->nama_tampilan }}" 
                              class="max-w-full max-h-[70vh] h-auto rounded-xl shadow-lg border border-white cursor-zoom-in transition-transform duration-300 hover:scale-[1.01]"
                              onclick="this.classList.toggle('max-h-none'); this.classList.toggle('cursor-zoom-in'); this.classList.toggle('cursor-zoom-out');">
@@ -117,7 +117,7 @@
                         </div>
 
                     @elseif($preview_type === 'pdf')
-                        <iframe src="/open_file_stream/{{ $file->id }}#toolbar=0" class="w-full h-[75vh] rounded-2xl border border-gray-200 shadow-sm bg-gray-100" frameborder="0"></iframe>
+                        <iframe src="/open_file_stream/{{ $file->id }}{{ $file->preview_path ? '?source=preview' : '' }}#toolbar=0" class="w-full h-[75vh] rounded-2xl border border-gray-200 shadow-sm bg-gray-100" frameborder="0"></iframe>
 
                     @elseif($preview_type === 'office')
                         @if($file->preview_path)

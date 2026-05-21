@@ -17,8 +17,8 @@ class FolderController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $folders = $request->user()->folders()
-            ->whereNull('parent_id')
+        $user = $request->user();
+        $folders = \App\Services\RbacScopeService::getRootFolders($user)
             ->withCount(['children', 'files'])
             ->get()
             ->map(fn ($f) => $this->mapFolder($f));
@@ -45,10 +45,20 @@ class FolderController extends Controller
         $user     = $request->user();
         $parentId = $this->resolveId($request->input('parent_id'));
 
+        if ($parentId) {
+            $parentFolder = Folder::findOrFail($parentId);
+            if (!\App\Services\RbacScopeService::canWriteFolder($user, $parentFolder)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda tidak memiliki akses menulis di folder ini.',
+                ], 403);
+            }
+        }
+
         // Duplicate name check within same parent
-        $exists = $user->folders()
-            ->where('parent_id', $parentId)
+        $exists = Folder::where('parent_id', $parentId)
             ->where('nama_folder', $request->name)
+            ->whereNull('deleted_at')
             ->exists();
 
         if ($exists) {
@@ -81,10 +91,16 @@ class FolderController extends Controller
      */
     public function show(Request $request, $id): JsonResponse
     {
-        $folder = $request->user()->folders()
-            ->with(['children.files', 'files'])
+        $folder = Folder::with(['children.files', 'files'])
             ->withCount(['children', 'files'])
             ->findOrFail($id);
+
+        if (!\App\Services\RbacScopeService::canAccessFolder($request->user(), $folder)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
 
         if ($folder->trashed()) {
             return response()->json([
@@ -109,12 +125,18 @@ class FolderController extends Controller
 
     /**
      * PATCH /api/v1/folders/{id}
-     * Rename a folder (also updates physical disk path + all descendants).
+     * Rename a folder.
      */
     public function update(Request $request, $id): JsonResponse
     {
         $request->validate(['name' => 'required|string|max:255']);
-        $folder  = $request->user()->folders()->findOrFail($id);
+        $folder  = Folder::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFolder($request->user(), $folder)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
         $folder->update(['nama_folder' => $request->name]);
 
         return response()->json([
@@ -130,7 +152,13 @@ class FolderController extends Controller
      */
     public function destroy(Request $request, $id): JsonResponse
     {
-        $folder = $request->user()->folders()->findOrFail($id);
+        $folder = Folder::findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFolder($request->user(), $folder)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
         $this->trashFolderAndContents($folder);
 
         return response()->json([
@@ -144,7 +172,13 @@ class FolderController extends Controller
      */
     public function restore(Request $request, $id): JsonResponse
     {
-        $folder = $request->user()->folders()->onlyTrashed()->findOrFail($id);
+        $folder = Folder::onlyTrashed()->findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFolder($request->user(), $folder)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
         $folder->restore();
 
         return response()->json([
@@ -159,7 +193,13 @@ class FolderController extends Controller
     public function forceDelete(Request $request, $id): JsonResponse
     {
         $user   = $request->user();
-        $folder = $user->folders()->withTrashed()->findOrFail($id);
+        $folder = Folder::withTrashed()->findOrFail($id);
+        if (!\App\Services\RbacScopeService::canWriteFolder($user, $folder)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
         $this->permanentDeleteFolder($folder, $user);
 
         return response()->json([
@@ -174,7 +214,10 @@ class FolderController extends Controller
      */
     public function tree(Request $request): JsonResponse
     {
-        $folders = $request->user()->folders()
+        $user = $request->user();
+        $accessibleFolderIds = \App\Services\RbacScopeService::getAccessibleFolderIds($user);
+
+        $folders = Folder::whereIn('id', $accessibleFolderIds)
             ->whereNull('parent_id')
             ->with('children.children') // 3 levels deep
             ->get();
@@ -250,7 +293,10 @@ class FolderController extends Controller
             if ($file->preview_path && Storage::disk('local')->exists($file->preview_path)) Storage::disk('local')->delete($file->preview_path);
             if ($file->thumbnail_path && Storage::disk('public')->exists($file->thumbnail_path)) Storage::disk('public')->delete($file->thumbnail_path);
 
-            $user->decrement('storage_used', $file->ukuran);
+            $fileOwner = $file->user;
+            if ($fileOwner) {
+                $fileOwner->decrement('storage_used_bytes', $file->ukuran);
+            }
             $file->forceDelete();
         }
         foreach ($folder->children()->withTrashed()->get() as $sub) {
@@ -258,6 +304,4 @@ class FolderController extends Controller
         }
         $folder->forceDelete();
     }
-
-
 }
