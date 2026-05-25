@@ -21,6 +21,7 @@ class Register extends Controller
     {
         $request->validate([
             'role_type' => 'required|in:siswa,guru_tendik',
+            'username' => 'required|string|min:3|max:255|unique:users,username|regex:/^[a-zA-Z0-9_.]+$/',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|min:8|confirmed',
             // Siswa validation inputs
@@ -52,6 +53,7 @@ class Register extends Controller
             $user = User::create([
                 'name' => $master->nama_lengkap,
                 'email' => $request->email,
+                'username' => $request->username,
                 'role' => 'siswa',
                 'target_kelas' => $master->kelas, // Automatically locked from master data
                 'target_jurusan' => $master->jurusan,
@@ -104,6 +106,7 @@ class Register extends Controller
             $user = User::create([
                 'name' => $master->nama_lengkap,
                 'email' => $request->email,
+                'username' => $request->username,
                 'role' => $role,
                 'target_kelas' => $targetKelas,
                 'target_jurusan' => $targetJurusan,

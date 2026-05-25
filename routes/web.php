@@ -12,6 +12,8 @@ Route::get('/login', function () {
     return view('login');
 })->name('login');
 
+Route::get('/register', [App\Http\Controllers\Register::class, 'tampil'])->name('register');
+
 // Google OAuth Routes
 Route::get('/auth/google', [App\Http\Controllers\OAuthController::class, 'redirectToGoogle']);
 Route::get('/auth/google/callback', [App\Http\Controllers\OAuthController::class, 'handleGoogleCallback']);
@@ -20,13 +22,12 @@ Route::get('/', function () {
     if (auth()->check()) {
         return redirect('/dashboard/' . auth()->id());
     }
-    return view('register');
+    return redirect()->route('login');
 });
 
-// Localhost phase: authentication is Google-only. Keep password controllers
-// available in code for the future username/password flow, but do not expose them.
-Route::post('/register', fn () => abort(404));
-Route::post('/login', fn () => abort(404));
+// Expose password authentication controllers
+Route::post('/register', [App\Http\Controllers\Register::class, 'register']);
+Route::post('/login', [App\Http\Controllers\Login::class, 'login']);
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // Dashboard

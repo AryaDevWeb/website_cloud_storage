@@ -11,9 +11,8 @@ class Login extends Controller
     public function login(Request $login)
     {
         $contoh = $login->validate([
-            'email' => 'required|email',
+            'username' => 'required|string',
             'password' => 'required'
-
         ]);
 
         $ingat = $login->has('ingat');
@@ -25,7 +24,7 @@ class Login extends Controller
 
             return redirect()->intended('/beranda/' . auth()->id())->with('status','Login Berhasil');
         }else {
-            return redirect('login')->with('error','Email atau password salah!!');
+            return redirect('login')->with('error','Username atau password salah!!');
         }
     
 

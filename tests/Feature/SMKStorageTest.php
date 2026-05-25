@@ -17,12 +17,17 @@ class SMKStorageTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_password_registration_and_login_endpoints_are_disabled_during_google_only_phase(): void
+    public function test_password_registration_and_login_endpoints_are_enabled(): void
     {
-        $this->post('/register')->assertNotFound();
-        $this->post('/login')->assertNotFound();
-        $this->postJson('/api/v1/auth/register')->assertNotFound();
-        $this->postJson('/api/v1/auth/login')->assertNotFound();
+        $this->get('/register')->assertOk();
+        $this->get('/login')->assertOk();
+        
+        // Assert validations are in place (resulting in 302 for HTML, 422 for JSON)
+        $this->post('/register')->assertStatus(302);
+        $this->post('/login')->assertStatus(302);
+        
+        $this->postJson('/api/v1/auth/register')->assertStatus(422);
+        $this->postJson('/api/v1/auth/login')->assertStatus(422);
     }
 
     public function test_upload_blocks_forbidden_and_large_video_files(): void

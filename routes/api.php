@@ -18,10 +18,8 @@ Route::prefix('v1')->group(function () {
     // ── Public routes (no token required) ──────────────────────────────
     Route::prefix('auth')->group(function () {
         Route::post('/google',   [App\Http\Controllers\Api\OAuthController::class, 'google']);
-        // Localhost phase: Google-only auth. Restore these later for
-        // username/password login when the school server is ready.
-        Route::post('/register', fn () => response()->json(['message' => 'Not Found'], 404));
-        Route::post('/login',    fn () => response()->json(['message' => 'Not Found'], 404));
+        Route::post('/register', [App\Http\Controllers\Api\AuthController::class, 'register']);
+        Route::post('/login',    [App\Http\Controllers\Api\AuthController::class, 'login']);
     });
 
     // ── Protected routes (requires valid Sanctum token) ─────────────────

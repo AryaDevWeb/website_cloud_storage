@@ -21,6 +21,7 @@ class AuthController extends Controller
     {
         $request->validate([
             'role_type' => 'required|in:siswa,guru_tendik',
+            'username' => 'required|string|min:3|max:255|unique:users,username|regex:/^[a-zA-Z0-9_.]+$/',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|min:8|confirmed',
             // Siswa validation inputs
@@ -55,6 +56,7 @@ class AuthController extends Controller
             $user = User::create([
                 'name' => $master->nama_lengkap,
                 'email' => $request->email,
+                'username' => $request->username,
                 'role' => 'siswa',
                 'target_kelas' => $master->kelas,
                 'target_jurusan' => $master->jurusan,
@@ -107,6 +109,7 @@ class AuthController extends Controller
             $user = User::create([
                 'name' => $master->nama_lengkap,
                 'email' => $request->email,
+                'username' => $request->username,
                 'role' => $role,
                 'target_kelas' => $targetKelas,
                 'target_jurusan' => $targetJurusan,
@@ -134,16 +137,16 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $request->validate([
-            'email' => 'required|email',
+            'username' => 'required|string',
             'password' => 'required',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::where('username', $request->username)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid email or password.'
+                'message' => 'Invalid username or password.'
             ], 401);
         }
 

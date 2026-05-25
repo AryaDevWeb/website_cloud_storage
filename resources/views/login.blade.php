@@ -5,6 +5,60 @@
 @section('content')
     <h2 class="text-lg font-semibold text-[#0f172a] mb-6">Masuk ke Akun</h2>
 
+    @if (session('error'))
+        <div class="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+            {{ session('error') }}
+        </div>
+    @endif
+
+    @if (session('status'))
+        <div class="mb-4 px-4 py-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-600">
+            {{ session('status') }}
+        </div>
+    @endif
+
+    <form action="/login" method="POST" class="space-y-4 mb-6">
+        @csrf
+        <div>
+            <label for="username" class="block text-sm font-medium text-[#64748b] mb-1.5">Username</label>
+            <input type="text" name="username" id="username" placeholder="Masukkan username Anda" required value="{{ old('username') }}"
+                class="w-full px-3 py-2.5 bg-white border border-[#e2e8f0] rounded-lg text-sm text-[#0f172a] placeholder-[#94a3b8] focus:outline-none focus:border-[#2563eb] transition-colors">
+            @error('username')
+                <p class="mt-1 text-xs text-red-500">{{ $message }}</p>
+            @enderror
+        </div>
+
+        <div>
+            <div class="flex items-center justify-between mb-1.5">
+                <label for="password" class="block text-sm font-medium text-[#64748b]">Password</label>
+            </div>
+            <input type="password" name="password" id="password" placeholder="••••••••" required
+                class="w-full px-3 py-2.5 bg-white border border-[#e2e8f0] rounded-lg text-sm text-[#0f172a] placeholder-[#94a3b8] focus:outline-none focus:border-[#2563eb] transition-colors">
+            @error('password')
+                <p class="mt-1 text-xs text-red-500">{{ $message }}</p>
+            @enderror
+        </div>
+
+        <div class="flex items-center">
+            <input type="checkbox" name="ingat" id="ingat" class="h-4 w-4 rounded border-[#e2e8f0] text-[#2563eb] focus:ring-[#2563eb]">
+            <label for="ingat" class="ml-2 block text-sm text-[#64748b] select-none cursor-pointer">Ingat saya</label>
+        </div>
+
+        <button type="submit"
+            class="w-full py-2.5 bg-[#2563eb] hover:bg-[#1d4ed8] text-white text-sm font-medium rounded-lg transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-[#2563eb] focus:ring-offset-2">
+            Masuk
+        </button>
+    </form>
+
+    <div class="relative my-4">
+        <div class="absolute inset-0 flex items-center">
+            <div class="w-full border-t border-[#e2e8f0]"></div>
+        </div>
+        <div class="relative flex justify-center text-sm">
+            <span class="px-2 bg-white text-[#64748b]">atau masuk dengan</span>
+        </div>
+    </div>
+
     {{-- Google Login Button --}}
     <a href="/auth/google" 
         class="flex items-center justify-center gap-3 w-full py-2.5 bg-white border border-[#e2e8f0] hover:bg-gray-50 text-sm font-medium rounded-lg transition-colors mb-4">
@@ -14,37 +68,13 @@
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
         </svg>
-        Masuk dengan Google
+        Google
     </a>
-
-    <div class="relative my-4">
-        <div class="absolute inset-0 flex items-center">
-            <div class="w-full border-t border-[#e2e8f0]"></div>
-        </div>
-        <div class="relative flex justify-center text-sm">
-            <span class="px-2 bg-white text-[#64748b]">atau</span>
-        </div>
-    </div>
-
-    <div class="text-center mb-4">
-        <p class="text-sm text-[#64748b]">
-            Login hanya dengan akun Google.<br>
-            Tidak perlu password.
-        </p>
-    </div>
 
     <div class="mt-5 pt-5 border-t border-[#e2e8f0] text-center">
         <p class="text-sm text-[#64748b]">Belum punya akun?</p>
-        <a href="/" class="inline-block mt-2 text-sm text-[#2563eb] hover:text-[#1d4ed8] transition-colors font-medium">
-            Daftar dengan Google
+        <a href="/register" class="inline-block mt-2 text-sm text-[#2563eb] hover:text-[#1d4ed8] transition-colors font-medium">
+            Daftar Sekarang
         </a>
     </div>
-
-    @if (session('error'))
-        <p class="mt-3 text-sm text-red-500">{{ session('error') }}</p>
-    @endif
-
-    @if (session('status'))
-        <p class="mt-3 text-sm text-green-600">{{ session('status') }}</p>
-    @endif
 @endsection
