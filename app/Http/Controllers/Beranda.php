@@ -136,7 +136,7 @@ class Beranda extends Controller
             // Create ZIP archive containing the original file
             $tempZipPath = tempnam(sys_get_temp_dir(), 'zip');
             $zip = new \ZipArchive();
-            if ($zip->open($tempZipPath, \ZipArchive::CREATE | \ZipArchive::OVE'RWRITE) === true) {
+            if ($zip->open($tempZipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
                 $zip->addFile($file->getRealPath(), $displayName);
                 $zip->close();
             } else {
