@@ -1,8 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Register;
-use App\Http\Controllers\Login;
+use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\Beranda;
 
 
@@ -24,12 +23,18 @@ Route::get('/', function () {
     return view('register');
 });
 
-Route::post('/register', [Register::class, 'register']);
-Route::post('/login', [Login::class, 'login']);
+// Localhost phase: authentication is Google-only. Keep password controllers
+// available in code for the future username/password flow, but do not expose them.
+Route::post('/register', fn () => abort(404));
+Route::post('/login', fn () => abort(404));
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // Dashboard
     Route::get('/dashboard/{id}', [Beranda::class, 'dashboard'])->name('dashboard');
+
+    // Admin
+    Route::get('/admin/users', [UserManagementController::class, 'index'])->name('admin.users');
+    Route::patch('/admin/users/{user}', [UserManagementController::class, 'update'])->name('admin.users.update');
 
     // Beranda & Core Actions
     Route::get('/beranda/{id}', [Beranda::class, 'akun'])->name('beranda');

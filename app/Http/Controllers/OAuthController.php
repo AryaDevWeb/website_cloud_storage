@@ -38,6 +38,8 @@ class OAuthController extends Controller
                     $user->update([
                         'google_id' => $googleUser->id,
                         'avatar' => $googleUser->avatar,
+                        'role' => $this->roleForGoogleEmail($googleUser->email, $user->role),
+                        'storage_limit_bytes' => $user->storage_limit_bytes ?: 1 * 1024 * 1024 * 1024,
                     ]);
                 } else {
                     // Create new user
@@ -46,6 +48,7 @@ class OAuthController extends Controller
                         'email' => $googleUser->email,
                         'google_id' => $googleUser->id,
                         'avatar' => $googleUser->avatar,
+                        'role' => $this->roleForGoogleEmail($googleUser->email),
                         'storage_limit_bytes' => 1 * 1024 * 1024 * 1024, // 1 GB default
                         'storage_used_bytes' => 0,
                     ]);
@@ -61,5 +64,19 @@ class OAuthController extends Controller
         } catch (\Exception $e) {
             return redirect('/login')->with('error', 'Gagal login dengan Google: ' . $e->getMessage());
         }
+    }
+
+    private function roleForGoogleEmail(string $email, ?string $currentRole = null): string
+    {
+        $adminEmails = collect(explode(',', (string) env('LOCAL_ADMIN_EMAILS', '')))
+            ->map(fn ($item) => strtolower(trim($item)))
+            ->filter()
+            ->all();
+
+        if (in_array(strtolower($email), $adminEmails, true)) {
+            return 'admin';
+        }
+
+        return $currentRole ?: 'siswa';
     }
 }

@@ -11,6 +11,7 @@ use App\Models\Gallery;
 use App\Models\Wallet;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Folder;
+use App\Services\FileArchiveService;
 use Illuminate\Support\Str;
 use Spatie\PdfToText\Pdf;
 use Illuminate\Validation\Rule;
@@ -62,7 +63,7 @@ class Beranda extends Controller
         
         $breakdown = ['Images'=>0, 'Videos'=>0, 'PDFs'=>0, 'Docs'=>0, 'Others'=>0];
         foreach ($user->galleries as $f) {
-            $ext = strtolower(pathinfo($f->file, PATHINFO_EXTENSION));
+            $ext = strtolower($f->extension ?: pathinfo($f->nama_tampilan ?: $f->file, PATHINFO_EXTENSION));
             $cat = match(true) {
                 in_array($ext, ['jpg','jpeg','png','gif','svg','webp']) => 'Images',
                 in_array($ext, ['mp4','webm','mov','avi'])             => 'Videos',
@@ -111,7 +112,7 @@ class Beranda extends Controller
             }
 
             // Check if user has enough storage
-            if (($user->storage_used_bytes + $fileSize) > $user->storage_limit_bytes) {
+            if (!$user->hasAvailableStorage($fileSize)) {
                 return back()->with('error', 'Penyimpanan Anda penuh! Sisa ruang: ' . number_format(($user->storage_limit_bytes - $user->storage_used_bytes) / 1024 / 1024, 2) . ' MB');
             }
 
@@ -133,15 +134,7 @@ class Beranda extends Controller
             $storage_path = "users/{$user_id}/original";
             Storage::disk('local')->makeDirectory($storage_path);
 
-            // Create ZIP archive containing the original file
-            $tempZipPath = tempnam(sys_get_temp_dir(), 'zip');
-            $zip = new \ZipArchive();
-            if ($zip->open($tempZipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
-                $zip->addFile($file->getRealPath(), $displayName);
-                $zip->close();
-            } else {
-                return back()->with('error', 'Gagal mengompresi file ke ZIP.');
-            }
+            $tempZipPath = FileArchiveService::createZipFromUpload($file, $displayName);
 
             $compressedSize = filesize($tempZipPath);
 
@@ -408,22 +401,17 @@ class Beranda extends Controller
             abort(404, 'File tidak ditemukan di penyimpanan.');
         }
 
-        $zip = new \ZipArchive();
-        if ($zip->open($zipAbsolutePath) === true) {
-            $fileNameInZip = $zip->getNameIndex(0);
-            $tempDir = storage_path('app/temp');
-            if (!file_exists($tempDir)) {
-                mkdir($tempDir, 0777, true);
-            }
-            $tempFilePath = $tempDir . DIRECTORY_SEPARATOR . \Illuminate\Support\Str::random(10) . '_' . $fileNameInZip;
-            
-            $zip->extractTo($tempDir, $fileNameInZip);
-            $extractedPath = $tempDir . DIRECTORY_SEPARATOR . $fileNameInZip;
-            rename($extractedPath, $tempFilePath);
-            $zip->close();
-
-            return response()->download($tempFilePath, $file->nama_tampilan)->deleteFileAfterSend(true);
-        } else {
+        try {
+            $extracted = FileArchiveService::extractFirstFileToTemp($zipAbsolutePath);
+            return response()->streamDownload(function () use ($extracted) {
+                $stream = fopen($extracted['path'], 'rb');
+                if ($stream) {
+                    fpassthru($stream);
+                    fclose($stream);
+                }
+                @unlink($extracted['path']);
+            }, $file->nama_tampilan);
+        } catch (\RuntimeException $e) {
             abort(500, 'Gagal membuka file arsip.');
         }
     }
@@ -495,7 +483,7 @@ class Beranda extends Controller
             return back()->with('error', 'File tidak ditemukan');
         }
 
-        $extension = strtolower(pathinfo($file->file, PATHINFO_EXTENSION));
+        $extension = strtolower($file->extension ?: pathinfo($file->nama_tampilan ?: $file->file, PATHINFO_EXTENSION));
         
         // Auto-assign preview_type if not set
         if (!$file->preview_type) {
@@ -699,7 +687,7 @@ class Beranda extends Controller
                 return response()->json(['message' => 'File MP4 tidak boleh lebih dari 50 MB.'], 422);
             }
 
-            if (($user->storage_used_bytes + $fileSize) > $user->storage_limit_bytes) {
+            if (!$user->hasAvailableStorage($fileSize)) {
                 return response()->json(['message' => 'Penyimpanan penuh'], 422);
             }
 
@@ -726,15 +714,7 @@ class Beranda extends Controller
             $storage_path = "users/{$user_id}/original";
             Storage::disk('local')->makeDirectory($storage_path);
 
-            // Create ZIP archive containing the original file
-            $tempZipPath = tempnam(sys_get_temp_dir(), 'zip');
-            $zip = new \ZipArchive();
-            if ($zip->open($tempZipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
-                $zip->addFile($file->getRealPath(), $displayName);
-                $zip->close();
-            } else {
-                return response()->json(['message' => 'Gagal mengompresi file ke ZIP.'], 500);
-            }
+            $tempZipPath = FileArchiveService::createZipFromUpload($file, $displayName);
 
             $compressedSize = filesize($tempZipPath);
 
@@ -777,7 +757,7 @@ class Beranda extends Controller
                 'id' => (string)$gallery->id,
                 'type' => 'file',
                 'name' => $gallery->nama_tampilan,
-                'ext' => strtolower(pathinfo($gallery->file, PATHINFO_EXTENSION)),
+                'ext' => $gallery->extension,
                 'size' => $gallery->ukuran,
                 'modified' => $gallery->updated_at->toIso8601String(),
                 'owner' => 'You'
@@ -940,7 +920,7 @@ class Beranda extends Controller
 
     private function mapFile(Gallery $f): array
     {
-        $ext = strtolower(pathinfo($f->file, PATHINFO_EXTENSION));
+        $ext = strtolower($f->extension ?: pathinfo($f->nama_tampilan ?: $f->file, PATHINFO_EXTENSION));
         /** @var FilesystemAdapter $disk */
         $disk = Storage::disk('public');
         
@@ -1200,30 +1180,25 @@ class Beranda extends Controller
         }
 
         $zipAbsolutePath = Storage::disk('local')->path($zipPath);
-        $zip = new \ZipArchive();
-        if ($zip->open($zipAbsolutePath) !== true) {
+        try {
+            $extracted = FileArchiveService::extractFirstFileToTemp($zipAbsolutePath);
+        } catch (\RuntimeException $e) {
             abort(500, 'Gagal membuka file arsip.');
         }
 
-        $fileNameInZip = $zip->getNameIndex(0);
-        $tempDir = storage_path('app/temp');
-        if (!file_exists($tempDir)) {
-            mkdir($tempDir, 0777, true);
-        }
-        $tempFilePath = $tempDir . DIRECTORY_SEPARATOR . \Illuminate\Support\Str::random(10) . '_' . $fileNameInZip;
-        $zip->extractTo($tempDir, $fileNameInZip);
-        $extractedPath = $tempDir . DIRECTORY_SEPARATOR . $fileNameInZip;
-        if ($extractedPath !== $tempFilePath) {
-            rename($extractedPath, $tempFilePath);
-        }
-        $zip->close();
+        $mime = $file->mime_type ?: mime_content_type($extracted['path']);
 
-        $mime = $file->mime_type ?: mime_content_type($tempFilePath);
-
-        return response()->file($tempFilePath, [
+        return response()->stream(function () use ($extracted) {
+            $stream = fopen($extracted['path'], 'rb');
+            if ($stream) {
+                fpassthru($stream);
+                fclose($stream);
+            }
+            @unlink($extracted['path']);
+        }, 200, [
             'Content-Type' => $mime,
             'Content-Disposition' => 'inline; filename="' . $file->nama_tampilan . '"'
-        ])->deleteFileAfterSend(true);
+        ]);
     }
 
     public function pindah_sampah()
@@ -1240,5 +1215,3 @@ class Beranda extends Controller
         return view('recent',compact('file'));
     }
 }
-
-

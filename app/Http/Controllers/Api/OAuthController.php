@@ -7,7 +7,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Laravel\Socialite\Facades\Socialite;
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
 
 class OAuthController extends Controller
 {
@@ -50,6 +49,8 @@ class OAuthController extends Controller
                     $user->update([
                         'google_id' => $googleUser->id,
                         'avatar' => $googleUser->avatar,
+                        'role' => $this->roleForGoogleEmail($googleUser->email, $user->role),
+                        'storage_limit_bytes' => $user->storage_limit_bytes ?: 1 * 1024 * 1024 * 1024,
                     ]);
                 } else {
                     // Create new user
@@ -58,6 +59,7 @@ class OAuthController extends Controller
                         'email' => $googleUser->email,
                         'google_id' => $googleUser->id,
                         'avatar' => $googleUser->avatar,
+                        'role' => $this->roleForGoogleEmail($googleUser->email),
                         'storage_limit_bytes' => 1 * 1024 * 1024 * 1024, // 1 GB default
                         'storage_used_bytes' => 0,
                     ]);
@@ -112,11 +114,28 @@ class OAuthController extends Controller
             'email' => $user->email,
             'avatar' => $user->avatar,
             'google_id' => $user->google_id,
+            'role' => $user->role,
+            'target_kelas' => $user->target_kelas,
+            'target_jurusan' => $user->target_jurusan,
             'storage_used' => (int) $user->storage_used,
             'storage_quota' => (int) $user->storage_quota,
             'storage_used_mb' => round($user->storage_used / 1024 / 1024, 2),
             'storage_quota_mb' => round($user->storage_quota / 1024 / 1024, 2),
             'created_at' => $user->created_at?->toIso8601String(),
         ];
+    }
+
+    private function roleForGoogleEmail(string $email, ?string $currentRole = null): string
+    {
+        $adminEmails = collect(explode(',', (string) env('LOCAL_ADMIN_EMAILS', '')))
+            ->map(fn ($item) => strtolower(trim($item)))
+            ->filter()
+            ->all();
+
+        if (in_array(strtolower($email), $adminEmails, true)) {
+            return 'admin';
+        }
+
+        return $currentRole ?: 'siswa';
     }
 }

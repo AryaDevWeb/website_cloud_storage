@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Gallery;
+use App\Services\FileArchiveService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -59,7 +60,7 @@ class ProcessFilePreview implements ShouldQueue
             }
 
             // Extract the original file from the ZIP archive to a temporary file
-            $extractedAbsolutePath = $this->extractFromZip($originalAbsolutePath);
+            $extractedAbsolutePath = FileArchiveService::extractFirstFileToTemp($originalAbsolutePath)['path'];
 
             if ($gallery->preview_type === 'image') {
                 $this->processImage($gallery, $extractedAbsolutePath, $user_id, $uuid);
@@ -85,25 +86,6 @@ class ProcessFilePreview implements ShouldQueue
                 @unlink($extractedAbsolutePath);
             }
         }
-    }
-
-    /**
-     * Extract the raw file from the ZIP archive.
-     */
-    private function extractFromZip(string $zipAbsolutePath): string
-    {
-        $zip = new \ZipArchive();
-        if ($zip->open($zipAbsolutePath) === true) {
-            $tempDir = storage_path('app/temp');
-            if (!file_exists($tempDir)) {
-                mkdir($tempDir, 0777, true);
-            }
-            $fileNameInZip = $zip->getNameIndex(0);
-            $zip->extractTo($tempDir, $fileNameInZip);
-            $zip->close();
-            return $tempDir . DIRECTORY_SEPARATOR . $fileNameInZip;
-        }
-        throw new \Exception("Gagal membuka file ZIP: " . $zipAbsolutePath);
     }
 
     private function processImage(Gallery $gallery, string $extractedAbsolutePath, $user_id, $uuid)

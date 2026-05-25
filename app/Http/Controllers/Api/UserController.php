@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
@@ -65,7 +64,7 @@ class UserController extends Controller
         $breakdown = ['Images' => 0, 'Videos' => 0, 'PDFs' => 0, 'Docs' => 0, 'Others' => 0];
 
         foreach ($user->galleries as $f) {
-            $ext = strtolower(pathinfo($f->file, PATHINFO_EXTENSION));
+            $ext = strtolower($f->extension ?: pathinfo($f->nama_tampilan ?: $f->file, PATHINFO_EXTENSION));
             $cat = match (true) {
                 in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp']) => 'Images',
                 in_array($ext, ['mp4', 'webm', 'mov', 'avi'])                => 'Videos',

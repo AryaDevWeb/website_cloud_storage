@@ -26,62 +26,69 @@ class SharedDriveSeeder extends Seeder
             ]);
         }
 
-        // 1. Shared Drive for XII RPL
-        $rplDrive = Folder::create([
-            'nama_folder' => 'Shared Drive XII RPL',
-            'user_id' => $admin->id,
-            'is_shared_drive' => true,
-            'scope_kelas' => 'XII RPL',
-            'permission' => 1,
-            'path' => '',
+        Folder::whereIn('nama_folder', [
+            'Shared Drive XI TKJ',
+            'Shared Drive Tendik',
+        ])->update([
+            'is_shared_drive' => false,
+            'scope_kelas' => null,
+            'scope_jurusan' => null,
+            'scope_tendik' => null,
         ]);
 
-        // Subfolder assignment inside XII RPL
-        Folder::create([
-            'nama_folder' => 'Pengumpulan Tugas XII RPL',
-            'user_id' => $admin->id,
-            'parent_id' => $rplDrive->id,
-            'is_assignment_folder' => true,
-            'permission' => 1,
-            'path' => '',
-        ]);
+        foreach (['X RPL', 'XI RPL', 'XII RPL'] as $className) {
+            $classDrive = Folder::updateOrCreate(
+                [
+                    'nama_folder' => "Shared Drive {$className}",
+                    'parent_id' => null,
+                ],
+                [
+                    'user_id' => $admin->id,
+                    'is_shared_drive' => true,
+                    'scope_kelas' => $className,
+                    'scope_jurusan' => null,
+                    'scope_tendik' => null,
+                    'permission' => 1,
+                    'path' => '',
+                ]
+            );
 
-        // 2. Shared Drive for XI TKJ
-        $tkjDrive = Folder::create([
-            'nama_folder' => 'Shared Drive XI TKJ',
-            'user_id' => $admin->id,
-            'is_shared_drive' => true,
-            'scope_kelas' => 'XI TKJ',
-            'permission' => 1,
-            'path' => '',
-        ]);
+            Folder::updateOrCreate(
+                [
+                    'nama_folder' => "Materi {$className}",
+                    'parent_id' => $classDrive->id,
+                ],
+                [
+                    'user_id' => $admin->id,
+                    'is_assignment_folder' => false,
+                    'permission' => 1,
+                    'path' => '',
+                ]
+            );
 
-        // Subfolder assignment inside XI TKJ
-        Folder::create([
-            'nama_folder' => 'Pengumpulan Tugas XI TKJ',
-            'user_id' => $admin->id,
-            'parent_id' => $tkjDrive->id,
-            'is_assignment_folder' => true,
-            'permission' => 1,
-            'path' => '',
-        ]);
+            Folder::updateOrCreate(
+                [
+                    'nama_folder' => "Pengumpulan Tugas {$className}",
+                    'parent_id' => $classDrive->id,
+                ],
+                [
+                    'user_id' => $admin->id,
+                    'is_assignment_folder' => true,
+                    'permission' => 1,
+                    'path' => '',
+                ]
+            );
+        }
 
-        // 3. Shared Drive for Jurusan RPL
-        Folder::create([
+        Folder::updateOrCreate([
             'nama_folder' => 'Shared Drive Jurusan RPL',
+            'parent_id' => null,
+        ], [
             'user_id' => $admin->id,
             'is_shared_drive' => true,
+            'scope_kelas' => null,
             'scope_jurusan' => 'RPL',
-            'permission' => 1,
-            'path' => '',
-        ]);
-
-        // 4. Shared Drive for Tendik
-        Folder::create([
-            'nama_folder' => 'Shared Drive Tendik',
-            'user_id' => $admin->id,
-            'is_shared_drive' => true,
-            'scope_tendik' => 'tendik',
+            'scope_tendik' => null,
             'permission' => 1,
             'path' => '',
         ]);

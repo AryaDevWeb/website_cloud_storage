@@ -117,6 +117,12 @@
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                         Profile
                     </a>
+                    @if(auth()->user()->role === 'admin')
+                    <a href="/admin/users" class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-500 hover:text-gray-800 hover:bg-gray-50" role="menuitem">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.5 6a4.5 4.5 0 109 0 4.5 4.5 0 00-9 0zM3 20.25a6.75 6.75 0 0113.5 0M18 18.75a4.5 4.5 0 013 1.1"/></svg>
+                        User Access
+                    </a>
+                    @endif
                     <form action="/logout" method="POST">@csrf
                         <button type="submit" class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50" role="menuitem">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>

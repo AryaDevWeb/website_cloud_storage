@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use Hash;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use App\Models\User;
 use App\Models\MasterValidation;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 
 class Register extends Controller
 {
@@ -25,20 +25,17 @@ class Register extends Controller
             'password' => 'required|min:8|confirmed',
             // Siswa validation inputs
             'nama_lengkap' => 'required_if:role_type,siswa|nullable|string',
-            'nisn' => 'required_if:role_type,siswa|nullable|string',
-            'nik' => 'required_if:role_type,siswa|nullable|string',
+            'nisn' => 'exclude_unless:role_type,siswa|required_without:nik|nullable|string',
+            'nik' => 'exclude_unless:role_type,siswa|required_without:nisn|nullable|string',
             // Guru/Tendik validation inputs
-            'nip' => 'required_if:role_type,guru_tendik|nullable|string',
-            'nuptk' => 'required_if:role_type,guru_tendik|nullable|string',
+            'nip' => 'exclude_unless:role_type,guru_tendik|required_without:nuptk|nullable|string',
+            'nuptk' => 'exclude_unless:role_type,guru_tendik|required_without:nip|nullable|string',
         ]);
 
         if ($request->role_type === 'siswa') {
             // Find record in master data
             $master = MasterValidation::where('role', 'siswa')
-                ->where(function ($q) use ($request) {
-                    $q->where('nama_lengkap', 'ILIKE', $request->nama_lengkap)
-                      ->orWhere('nama_lengkap', 'LIKE', $request->nama_lengkap);
-                })
+                ->whereRaw('LOWER(nama_lengkap) = ?', [mb_strtolower(trim($request->nama_lengkap))])
                 ->where(function ($q) use ($request) {
                     if ($request->nisn) $q->orWhere('nisn', $request->nisn);
                     if ($request->nik) $q->orWhere('nik', $request->nik);

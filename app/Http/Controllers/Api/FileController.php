@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Folder;
 use App\Models\Gallery;
 use App\Models\Wallet;
+use App\Services\FileArchiveService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -102,7 +103,7 @@ class FileController extends Controller
             ], 422);
         }
 
-        if (($user->storage_used_bytes + $fileSize) > $user->storage_limit_bytes) {
+        if (!$user->hasAvailableStorage($fileSize)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Storage quota exceeded.',
@@ -129,18 +130,7 @@ class FileController extends Controller
         $storagePath = "users/{$user->id}/original";
         Storage::disk('local')->makeDirectory($storagePath);
 
-        // Create ZIP archive containing the original file
-        $tempZipPath = tempnam(sys_get_temp_dir(), 'zip');
-        $zip = new \ZipArchive();
-        if ($zip->open($tempZipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
-            $zip->addFile($file->getRealPath(), $displayName);
-            $zip->close();
-        } else {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal mengompresi file ke ZIP.',
-            ], 500);
-        }
+        $tempZipPath = FileArchiveService::createZipFromUpload($file, $displayName);
 
         $compressedSize = filesize($tempZipPath);
 
@@ -273,22 +263,17 @@ class FileController extends Controller
             ], 404);
         }
 
-        $zip = new \ZipArchive();
-        if ($zip->open($zipAbsolutePath) === true) {
-            $fileNameInZip = $zip->getNameIndex(0);
-            $tempDir = storage_path('app/temp');
-            if (!file_exists($tempDir)) {
-                mkdir($tempDir, 0777, true);
-            }
-            $tempFilePath = $tempDir . DIRECTORY_SEPARATOR . \Illuminate\Support\Str::random(10) . '_' . $fileNameInZip;
-            
-            $zip->extractTo($tempDir, $fileNameInZip);
-            $extractedPath = $tempDir . DIRECTORY_SEPARATOR . $fileNameInZip;
-            rename($extractedPath, $tempFilePath);
-            $zip->close();
-
-            return response()->download($tempFilePath, $file->nama_tampilan)->deleteFileAfterSend(true);
-        } else {
+        try {
+            $extracted = FileArchiveService::extractFirstFileToTemp($zipAbsolutePath);
+            return response()->streamDownload(function () use ($extracted) {
+                $stream = fopen($extracted['path'], 'rb');
+                if ($stream) {
+                    fpassthru($stream);
+                    fclose($stream);
+                }
+                @unlink($extracted['path']);
+            }, $file->nama_tampilan);
+        } catch (\RuntimeException $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to open ZIP archive.',
@@ -533,7 +518,7 @@ class FileController extends Controller
 
     private function mapFile(Gallery $f, bool $trashed = false): array
     {
-        $ext = strtolower(pathinfo($f->file, PATHINFO_EXTENSION));
+        $ext = strtolower($f->extension ?: pathinfo($f->nama_tampilan ?: $f->file, PATHINFO_EXTENSION));
 
         return [
             'id'           => (string) $f->id,

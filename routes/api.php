@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\FileController;
 use App\Http\Controllers\Api\FolderController;
 use App\Http\Controllers\Api\UserController;
@@ -19,16 +18,18 @@ Route::prefix('v1')->group(function () {
     // ── Public routes (no token required) ──────────────────────────────
     Route::prefix('auth')->group(function () {
         Route::post('/google',   [App\Http\Controllers\Api\OAuthController::class, 'google']);
-        Route::post('/register', [AuthController::class, 'register']);
-        Route::post('/login',    [AuthController::class, 'login']);
+        // Localhost phase: Google-only auth. Restore these later for
+        // username/password login when the school server is ready.
+        Route::post('/register', fn () => response()->json(['message' => 'Not Found'], 404));
+        Route::post('/login',    fn () => response()->json(['message' => 'Not Found'], 404));
     });
 
     // ── Protected routes (requires valid Sanctum token) ─────────────────
     Route::middleware('auth:sanctum')->group(function () {
 
         // Auth
-        Route::post('/auth/logout', [AuthController::class, 'logout']);
-        Route::get('/auth/me',      [AuthController::class, 'me']);
+        Route::post('/auth/logout', [App\Http\Controllers\Api\AuthController::class, 'logout']);
+        Route::get('/auth/me',      [App\Http\Controllers\Api\AuthController::class, 'me']);
 
         // ── Files ──────────────────────────────────────────────────────
         Route::get('/files',                    [FileController::class, 'index']);       // List (paginated + filter)

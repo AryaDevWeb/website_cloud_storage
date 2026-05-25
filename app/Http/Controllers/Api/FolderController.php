@@ -249,7 +249,7 @@ class FolderController extends Controller
 
     private function mapFileBrief($f): array
     {
-        $ext = strtolower(pathinfo($f->file, PATHINFO_EXTENSION));
+        $ext = strtolower($f->extension ?: pathinfo($f->nama_tampilan ?: $f->file, PATHINFO_EXTENSION));
         return [
             'id'   => (string) $f->id,
             'type' => 'file',

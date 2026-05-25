@@ -33,6 +33,11 @@ class User extends Authenticatable
         'storage_used_bytes'  => 'integer',
     ];
 
+    public function hasAvailableStorage(int $incomingBytes): bool
+    {
+        return ($this->storage_used_bytes + $incomingBytes) <= $this->storage_limit_bytes;
+    }
+
     /**
      * Legacy column mapping for storage_quota (storage_limit_bytes)
      */
