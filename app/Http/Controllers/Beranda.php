@@ -14,7 +14,7 @@ use App\Models\Folder;
 use Illuminate\Support\Str;
 use Spatie\PdfToText\Pdf;
 use Illuminate\Validation\Rule;
-
+use Illuminate\Filesystem\FilesystemAdapter;
 
 
 class Beranda extends Controller
@@ -136,7 +136,7 @@ class Beranda extends Controller
             // Create ZIP archive containing the original file
             $tempZipPath = tempnam(sys_get_temp_dir(), 'zip');
             $zip = new \ZipArchive();
-            if ($zip->open($tempZipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
+            if ($zip->open($tempZipPath, \ZipArchive::CREATE | \ZipArchive::OVE'RWRITE) === true) {
                 $zip->addFile($file->getRealPath(), $displayName);
                 $zip->close();
             } else {
@@ -941,6 +941,9 @@ class Beranda extends Controller
     private function mapFile(Gallery $f): array
     {
         $ext = strtolower(pathinfo($f->file, PATHINFO_EXTENSION));
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+        
         return [
             'id'       => (string)$f->id,
             'type'     => 'file',
@@ -955,7 +958,7 @@ class Beranda extends Controller
             'conversion_status' => $f->conversion_status ?? 'done',
             'preview_type' => $f->preview_type ?: $this->mapPreviewType($ext),
             'preview_path' => $f->preview_path ? url("/open_file_stream/{$f->id}?source=preview") : null,
-            'thumbnail_url' => $f->thumbnail_path ? Storage::disk('public')->url($f->thumbnail_path) : null,
+            'thumbnail_url' => $f->thumbnail_path ? $disk->url($f->thumbnail_path) : null,
         ];
     }
 
@@ -1181,7 +1184,9 @@ class Beranda extends Controller
                 abort(404);
             }
             $fullPath = Storage::disk('local')->path($path);
-            $mime = Storage::disk('local')->mimeType($path);
+            /** @var FilesystemAdapter $localDisk */
+            $localDisk = Storage::disk('local');
+            $mime = $localDisk->mimeType($path);
             return response()->file($fullPath, [
                 'Content-Type' => $mime,
                 'Content-Disposition' => 'inline; filename="' . basename($path) . '"'
