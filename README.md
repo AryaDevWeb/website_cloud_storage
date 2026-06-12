@@ -1,115 +1,108 @@
 # Cloud Storage
 
-> A secure, scalable, and modern cloud storage ecosystem featuring a powerful Laravel-based web interface and an integrated REST API.
+Cloud Storage is a Laravel-based file management application for school storage workflows. It provides a web interface, a Sanctum-protected REST API, scoped shared drives, quota tracking, soft delete, starring, sharing, and asynchronous file preview processing.
 
-![Project Stage](https://img.shields.io/badge/Stage-Complete_/_In_Development-success.svg)
-![Framework](https://img.shields.io/badge/Framework-Laravel_12-red.svg)
-![Frontend](https://img.shields.io/badge/Frontend-Tailwind_CSS_%7C_Vanilla_JS-blue.svg)
+## Features
 
-## 📖 Overview
+- File upload, download, rename, move, star, share, restore, and permanent delete.
+- Recursive folder management with soft delete support.
+- Role and scope access control for `admin`, `guru_wali`, `guru_jurusan`, `tendik`, and `siswa`.
+- Shared drives by class, major, and staff scope.
+- Private file uploads by default, with explicit public sharing.
+- Storage quota tracking per user.
+- Original files archived as ZIP and restored on download/stream.
+- Background preview generation for images, videos, office files, and PDFs.
+- Mobile/API access through `/api/v1` with Laravel Sanctum.
 
-**Cloud Storage** is a comprehensive File Management SaaS (Software-as-a-Service) solution. Designed with a consistent, minimalist Tailwind CSS design language, it provides users with deep file manipulation functionalities, recursive folder management, permission controls, precise storage usage analytics (via pie/donut charts), and native PDF/text integrations. It also securely serves a complete REST API using Laravel Sanctum to connect to external client applications (e.g., Mobile Apps).
+## Tech Stack
 
-## ✨ Key Features
+- PHP 8.2+
+- Laravel 12
+- PostgreSQL
+- Laravel Sanctum
+- Laravel Socialite
+- Tailwind CSS 4
+- Vite
+- Vanilla JavaScript modules
+- `league/flysystem-aws-s3-v3`
+- `smalot/pdfparser`
+- `spatie/pdf-to-text`
 
-- **Advanced File Management:** Supports recursive directory trees, file renaming, moving, soft-deletion (Trash), Starring, and Sharing.
-- **Categorized Views:** Fast and intuitive file accessibility through 'Recent', 'Starred', 'Shared', and 'Trash' quick-filters.
-- **Storage Analytics:** Real-time quota calculations displaying "Used vs Free" space utilizing interactive `Chart.js` components.
-- **Extensible API Access:** Built-in `/api/v1` namespace secured by **Laravel Sanctum**, enabling robust stateless communication for separate mobile/desktop clients.
-- **AWS S3 Cloud Support:** Integrated `league/flysystem-aws-s3-v3` allows flexible driver configuration for scalable cloud deployments.
-- **Native PDF Parsing:** Uses `smalot/pdfparser` and `spatie/pdf-to-text` for advanced document inspection features on the backend.
-
-## 💻 Tech Stack
-
-### Backend & Core
-- **Platform:** PHP 8.5.3
-- **Framework:** Laravel 12.49.0
-- **Database:** PostgreSQL
-- **Authentication:** Session (Web) & Laravel Sanctum (API)
-- **Cloud Interface:** AWS S3 (via Flysystem)
-
-### Frontend (Web UI)
-- **Styling:** Tailwind CSS 4.0 (compiled via Vite)
-- **Interactivity:** Vanilla JavaScript (Module System: `fileManager.js`, `modalManager.js`, `uploadManager.js`, `previewManager.js`)
-- **Charting:** Chart.js
-- **Templating:** Laravel Blade (`dashboard`, `isi`, `akun`, `trash`)
-
-## 🗂 Project Structure
+## Project Structure
 
 ```text
-├── app/                  
-│   ├── Http/Controllers/      # Web UI Logic Controllers
-│   ├── Http/Controllers/Api/  # Unified API endpoints for external apps
-│   └── Models/                # Eloquent schemas (User, File, Folder)
-├── database/                  # Migrations for tables and schema management
-├── routes/                    
-│   ├── web.php                # Web Interface Routing
-│   └── api.php                # App API Routing (prefix: /api/v1/)
-└── resources/                 
-    ├── css/app.css            # Tailwind directives and core Design Tokens
-    ├── js/modules/            # Modular Vanilla JavaScript logics
-    └── views/                 # Blade UI structural templates
+app/
+  Http/Controllers/        Web controllers
+  Http/Controllers/Api/    API controllers
+  Jobs/                    Queue jobs for preview processing
+  Models/                  Eloquent models
+  Services/                Shared domain services
+database/
+  migrations/              Database schema changes
+  seeders/                 Master validation and shared drive seeders
+resources/
+  css/                     Tailwind entry
+  js/modules/              Frontend modules
+  views/                   Blade views
+routes/
+  web.php                  Web and session-based JSON routes
+  api.php                  Sanctum API routes
+tests/
+  Feature/                 Feature tests
+  Unit/                    Unit tests
 ```
 
-## 🚀 Installation & Build Instructions
+## Setup
 
-### Prerequisites
-- **PHP** 8.5.3 & **Composer**
-- **Node.js** & **NPM**
-- **PostgreSQL** Server
+```bash
+composer install
+npm install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+npm run build
+```
 
-### Setup Guide
+For local development:
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd website_cloud_storage
-   ```
-2. **Setup the Environment:**
-   Run the unified setup script (defined in `composer.json`):
-   ```bash
-   composer setup
-   ```
-   *The `setup` script will automatically execute `composer install`, duplicate `.env.example` to `.env`, generate the APP_KEY, execute database migrations, and install/build NPM dependencies.*
+```bash
+php artisan serve
+npm run dev
+php artisan queue:work
+```
 
-3. **Configure Database & Storage (Optional):**
-   Update your `.env` file with custom database credentials or AWS S3 keys if you aren't using the default local bindings.
-   ```ini
-   DB_CONNECTION=pgsql
-   DB_HOST=127.0.0.1
-   DB_PORT=5432
-   DB_DATABASE=cloud_storage_db
-   DB_USERNAME=arya
-   DB_PASSWORD=aryaserver
-   # S3_ configurations ...
-   ```
+## API Overview
 
-4. **Start the Development Server:**
-   ```bash
-   composer dev
-   ```
-   *This initializes the Laravel HTTP Server, Queue Listeners, Log Pail, and Vite HMR concurrently.*
+Public authentication endpoints:
 
-## 📡 API Architecture (v1)
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/google`
 
-The application provides a structured API under the `/api/v1` namespace for separate mobile/desktop implementations to communicate with the core storage engine.
+Protected endpoints require `Authorization: Bearer <token>`:
 
-### Essential Endpoints:
-- **Authentication:** `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`
-- **Files:** `GET /files`, `POST /files` (Upload), `GET /files/recent`, `GET /files/trash`
-- **File Actions:** `PATCH /files/{id}` (Rename/Move), `POST /files/{id}/star`, `GET /files/{id}/download`
-- **Folders:** `GET /folders/tree` (Recursive folder maps), `POST /folders`
+- `GET /api/v1/auth/me`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/files`
+- `POST /api/v1/files`
+- `GET /api/v1/files/{id}`
+- `GET /api/v1/files/{id}/download`
+- `GET /api/v1/files/{id}/stream`
+- `PATCH /api/v1/files/{id}`
+- `DELETE /api/v1/files/{id}`
+- `GET /api/v1/folders`
+- `POST /api/v1/folders`
+- `GET /api/v1/folders/tree`
 
-*(Note: Except for `/login` and `/register`, all API interactions require an `Authorization: Bearer <API-Token>` header)*
+## Verification
 
-## 🤝 Contributing & Maintenance
+```bash
+php artisan test
+npm run build
+```
 
-Contributions targeting modular UI updates, vanilla JS test validations, or wider cloud-driver implementations are welcomed!
+## Notes
 
-1. Create a Feature Branch (`git checkout -b feature/NewImplementation`)
-2. Commit your Changes (`git commit -m 'Added custom share links'`)
-3. Push to Branch (`git push origin feature/NewImplementation`)
-4. Open a Pull Request
-
-## 📄 License
-This project is open-sourced under the MIT License.
+- Google OAuth registration is limited to users found in `master_validations` or emails configured in `LOCAL_ADMIN_EMAILS`.
+- Uploaded files are private by default. Public access is controlled through the `izin` field.
+- Preview URLs exposed by the API use Sanctum-protected `/api/v1/files/{id}/stream`.

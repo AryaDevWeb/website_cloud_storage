@@ -3,32 +3,33 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Services\GoogleAccountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Laravel\Socialite\Facades\Socialite;
-use App\Models\User;
 
 class OAuthController extends Controller
 {
     /**
      * POST /api/v1/auth/google
-     * Login or register using Google ID token.
+     * Login or register using a Google OAuth access token.
      * 
      * Request body:
      * {
-     *   "id_token": "google id token from frontend",
-     *   "access_token": "optional google access token"
+     *   "access_token": "google access token from frontend"
      * }
      */
     public function google(Request $request): JsonResponse
     {
         $request->validate([
-            'id_token' => 'required|string',
+            'access_token' => 'required_without:id_token|string',
+            'id_token' => 'required_without:access_token|string',
         ]);
 
         try {
-            // Verify the Google token
-            $googleUser = Socialite::driver('google')->userFromToken($request->id_token);
+            $token = $request->input('access_token') ?: $request->input('id_token');
+            $googleUser = Socialite::driver('google')->userFromToken($token);
 
             if (!$googleUser) {
                 return response()->json([
@@ -37,33 +38,12 @@ class OAuthController extends Controller
                 ], 401);
             }
 
-            // Check if user exists by google_id
-            $user = User::where('google_id', $googleUser->id)->first();
-
+            $user = app(GoogleAccountService::class)->findOrCreateFromGoogleUser($googleUser);
             if (!$user) {
-                // Check if user exists by email
-                $user = User::where('email', $googleUser->email)->first();
-
-                if ($user) {
-                    // Update existing user with google_id
-                    $user->update([
-                        'google_id' => $googleUser->id,
-                        'avatar' => $googleUser->avatar,
-                        'role' => $this->roleForGoogleEmail($googleUser->email, $user->role),
-                        'storage_limit_bytes' => $user->storage_limit_bytes ?: 1 * 1024 * 1024 * 1024,
-                    ]);
-                } else {
-                    // Create new user
-                    $user = User::create([
-                        'name' => $googleUser->name,
-                        'email' => $googleUser->email,
-                        'google_id' => $googleUser->id,
-                        'avatar' => $googleUser->avatar,
-                        'role' => $this->roleForGoogleEmail($googleUser->email),
-                        'storage_limit_bytes' => 1 * 1024 * 1024 * 1024, // 1 GB default
-                        'storage_used_bytes' => 0,
-                    ]);
-                }
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Akun Google belum terdaftar di Master Dapodik.',
+                ], 422);
             }
 
             // Revoke old mobile tokens
@@ -125,17 +105,4 @@ class OAuthController extends Controller
         ];
     }
 
-    private function roleForGoogleEmail(string $email, ?string $currentRole = null): string
-    {
-        $adminEmails = collect(explode(',', (string) env('LOCAL_ADMIN_EMAILS', '')))
-            ->map(fn ($item) => strtolower(trim($item)))
-            ->filter()
-            ->all();
-
-        if (in_array(strtolower($email), $adminEmails, true)) {
-            return 'admin';
-        }
-
-        return $currentRole ?: 'siswa';
-    }
 }

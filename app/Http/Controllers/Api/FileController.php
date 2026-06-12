@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Folder;
 use App\Models\Gallery;
-use App\Models\Wallet;
 use App\Services\FileArchiveService;
+use App\Services\FileUploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -82,92 +82,11 @@ class FileController extends Controller
             'folder_id' => 'nullable|integer',
         ]);
 
-        $user     = $request->user();
-        $file     = $request->file('file');
-        $fileSize = $file->getSize();
-        $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension());
-
-        // Exclude restrictions: Block .exe, .iso
-        if (in_array($extension, ['exe', 'iso'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Ekstensi file .exe dan .iso diblokir untuk alasan keamanan.',
-            ], 422);
-        }
-
-        // Block .mp4 > 50 MB
-        if ($extension === 'mp4' && $fileSize > (50 * 1024 * 1024)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'File MP4 tidak boleh lebih dari 50 MB.',
-            ], 422);
-        }
-
-        if (!$user->hasAvailableStorage($fileSize)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Storage quota exceeded.',
-            ], 422);
-        }
-
-        $folderId    = $this->resolveId($request->input('folder_id'));
-        if ($folderId) {
-            $targetFolder = Folder::findOrFail($folderId);
-            if (!\App\Services\RbacScopeService::canWriteFolder($user, $targetFolder)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Anda tidak memiliki akses menulis di folder ini.',
-                ], 403);
-            }
-        }
-        
-        $mime_type = $file->getMimeType();
-        
-        $uuid = \Illuminate\Support\Str::uuid()->toString();
-        $safeName = $uuid . '.zip';
-        $displayName = basename($file->getClientOriginalName());
-
-        $storagePath = "users/{$user->id}/original";
-        Storage::disk('local')->makeDirectory($storagePath);
-
-        $tempZipPath = FileArchiveService::createZipFromUpload($file, $displayName);
-
-        $compressedSize = filesize($tempZipPath);
-
-        // Store ZIP in local storage
-        Storage::disk('local')->putFileAs($storagePath, new \Illuminate\Http\File($tempZipPath), $safeName);
-        @unlink($tempZipPath);
-        
-        $fullPath = $storagePath . '/' . $safeName;
-
-        $preview_type = $this->mapPreviewType($extension);
-        
-        // Determine initial conversion status
-        $needsConversion = in_array($preview_type, ['image', 'video', 'office', 'pdf']);
-        $conversion_status = $needsConversion ? 'pending' : 'done';
-
-        $gallery = Gallery::create([
-            'user_id'       => $user->id,
-            'folder_id'     => $folderId,
-            'file'          => $safeName,
-            'nama_tampilan' => $displayName,
-            'ukuran'        => $fileSize,
-            'compressed_size' => $compressedSize,
-            'izin'          => 1,
-            'path'          => $fullPath,
-            'mime_type'     => $mime_type,
-            'extension'     => $extension,
-            'preview_type'  => $preview_type,
-            'conversion_status' => $conversion_status,
-            'riwayat'       => now(),
-        ]);
-
-        if ($needsConversion) {
-            \App\Jobs\ProcessFilePreview::dispatch($gallery->id);
-        }
-
-        $user->increment('storage_used_bytes', $fileSize);
-        Wallet::firstOrCreate(['user_id' => $user->id], ['koin' => 0])->increment('koin', 10);
+        $gallery = app(FileUploadService::class)->store(
+            $request->user(),
+            $request->file('file'),
+            $this->resolveId($request->input('folder_id'))
+        );
 
         return response()->json([
             'success' => true,
@@ -273,6 +192,68 @@ class FileController extends Controller
                 }
                 @unlink($extracted['path']);
             }, $file->nama_tampilan);
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to open ZIP archive.',
+            ], 500);
+        }
+    }
+
+    /**
+     * GET /api/v1/files/{id}/stream
+     * Streams either the original file or generated preview using Sanctum auth.
+     */
+    public function stream(Request $request, $id)
+    {
+        $file = Gallery::whereNull('deleted_at')->findOrFail($id);
+        if (!\App\Services\RbacScopeService::canAccessFile($request->user(), $file)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized.',
+            ], 403);
+        }
+
+        if ($request->query('source') === 'preview' && $file->preview_path) {
+            if (!Storage::disk('local')->exists($file->preview_path)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Preview not found on storage.',
+                ], 404);
+            }
+
+            $absolutePath = Storage::disk('local')->path($file->preview_path);
+            $mime = Storage::disk('local')->mimeType($file->preview_path) ?: 'application/octet-stream';
+
+            return response()->file($absolutePath, [
+                'Content-Type' => $mime,
+                'Content-Disposition' => 'inline; filename="' . basename($file->preview_path) . '"',
+            ]);
+        }
+
+        $zipAbsolutePath = Storage::disk('local')->path($file->path);
+        if (!file_exists($zipAbsolutePath)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'File not found on storage.',
+            ], 404);
+        }
+
+        try {
+            $extracted = FileArchiveService::extractFirstFileToTemp($zipAbsolutePath);
+            $mime = $file->mime_type ?: mime_content_type($extracted['path']) ?: 'application/octet-stream';
+
+            return response()->stream(function () use ($extracted) {
+                $stream = fopen($extracted['path'], 'rb');
+                if ($stream) {
+                    fpassthru($stream);
+                    fclose($stream);
+                }
+                @unlink($extracted['path']);
+            }, 200, [
+                'Content-Type' => $mime,
+                'Content-Disposition' => 'inline; filename="' . str_replace('"', '', $file->nama_tampilan) . '"',
+            ]);
         } catch (\RuntimeException $e) {
             return response()->json([
                 'success' => false,
@@ -533,7 +514,7 @@ class FileController extends Controller
             'is_shared'    => $f->izin == 1,
             'conversion_status' => $f->conversion_status ?? 'done',
             'preview_type' => $f->preview_type ?: $this->mapPreviewType($ext),
-            'preview_url'  => $f->preview_path ? url("/open_file_stream/{$f->id}?source=preview") : url("/open_file_stream/{$f->id}"),
+            'preview_url'  => $f->preview_path ? url("/api/v1/files/{$f->id}/stream?source=preview") : url("/api/v1/files/{$f->id}/stream"),
             'thumbnail_url' => $f->thumbnail_path ? Storage::disk('public')->url($f->thumbnail_path) : null,
             'created_at'   => $f->created_at?->toIso8601String(),
             'updated_at'   => $f->updated_at?->toIso8601String(),

@@ -41,6 +41,7 @@ Route::prefix('v1')->group(function () {
         Route::patch('/files/{id}',             [FileController::class, 'update']);      // Rename
         Route::delete('/files/{id}',            [FileController::class, 'destroy']);     // Soft delete
         Route::get('/files/{id}/download',      [FileController::class, 'download']);    // Download stream
+        Route::get('/files/{id}/stream',        [FileController::class, 'stream']);      // Inline preview/original stream
 
         Route::post('/files/{id}/star',         [FileController::class, 'star']);        // Toggle star
         Route::post('/files/{id}/share',        [FileController::class, 'share']);       // Get share URL

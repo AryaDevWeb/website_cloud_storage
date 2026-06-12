@@ -6,11 +6,13 @@ use App\Models\Folder;
 use App\Models\Gallery;
 use App\Models\User;
 use App\Services\FileArchiveService;
+use App\Services\FileUploadService;
 use App\Services\RbacScopeService;
 use Database\Seeders\SharedDriveSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class SMKStorageTest extends TestCase
@@ -75,6 +77,7 @@ class SMKStorageTest extends TestCase
         $this->assertSame('implementation_plan.md', $gallery->nama_tampilan);
         $this->assertSame('md', $gallery->extension);
         $this->assertSame('done', $gallery->conversion_status);
+        $this->assertSame(0, (int) $gallery->izin);
         $this->assertGreaterThan(0, $gallery->compressed_size);
 
         $extracted = FileArchiveService::extractFirstFileToTemp(Storage::disk('local')->path($gallery->path));
@@ -85,6 +88,30 @@ class SMKStorageTest extends TestCase
         $download->assertOk();
 
         $this->assertSame("# Plan\nOriginal body", $download->streamedContent());
+    }
+
+    public function test_private_file_stream_api_is_limited_to_owner(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+
+        $owner = User::factory()->create();
+        $other = User::factory()->create();
+
+        $gallery = app(FileUploadService::class)->store(
+            $owner,
+            UploadedFile::fake()->createWithContent('notes.txt', 'private notes')
+        );
+
+        Sanctum::actingAs($other);
+        $this->get("/api/v1/files/{$gallery->id}/stream")
+            ->assertForbidden();
+
+        Sanctum::actingAs($owner);
+        $response = $this->get("/api/v1/files/{$gallery->id}/stream");
+
+        $response->assertOk();
+        $this->assertSame('private notes', $response->streamedContent());
     }
 
     public function test_rbac_allows_students_to_write_only_inside_assignment_folders(): void

@@ -12,6 +12,7 @@ use App\Models\Wallet;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Folder;
 use App\Services\FileArchiveService;
+use App\Services\FileUploadService;
 use Illuminate\Support\Str;
 use Spatie\PdfToText\Pdf;
 use Illuminate\Validation\Rule;
@@ -97,85 +98,20 @@ class Beranda extends Controller
 
         if ($request->hasFile('upload')) {
             $file = $request->file('upload');
-            $fileSize = $file->getSize();
             $user = auth()->user();
-            $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension());
-
-            // Exclude restrictions: Block .exe, .iso
-            if (in_array($extension, ['exe', 'iso'])) {
-                return back()->with('error', 'Ekstensi file .exe dan .iso diblokir untuk alasan keamanan.');
-            }
-
-            // Block .mp4 > 50 MB
-            if ($extension === 'mp4' && $fileSize > (50 * 1024 * 1024)) {
-                return back()->with('error', 'File MP4 tidak boleh lebih dari 50 MB.');
-            }
-
-            // Check if user has enough storage
-            if (!$user->hasAvailableStorage($fileSize)) {
-                return back()->with('error', 'Penyimpanan Anda penuh! Sisa ruang: ' . number_format(($user->storage_limit_bytes - $user->storage_used_bytes) / 1024 / 1024, 2) . ' MB');
-            }
-
-            $uuid = \Illuminate\Support\Str::uuid()->toString();
-            $safeName = $uuid . '.zip';
-            $displayName = $this->sanitizeDisplayName($file);
-            
             $folder_id = $request->input('folder_id');
-            if ($folder_id) {
-                $targetFolder = Folder::findOrFail($folder_id);
-                if (!\App\Services\RbacScopeService::canWriteFolder($user, $targetFolder)) {
-                    return back()->with('error', 'Anda tidak memiliki akses menulis di folder ini.');
-                }
-            }
-            $user_id = $user->id;
-
-            $mime_type = $file->getMimeType();
-
-            $storage_path = "users/{$user_id}/original";
-            Storage::disk('local')->makeDirectory($storage_path);
-
-            $tempZipPath = FileArchiveService::createZipFromUpload($file, $displayName);
-
-            $compressedSize = filesize($tempZipPath);
-
-            // Store ZIP in local storage
-            Storage::disk('local')->putFileAs($storage_path, new \Illuminate\Http\File($tempZipPath), $safeName);
-            @unlink($tempZipPath);
-            
-            $fullPath = $storage_path . '/' . $safeName;
-
-            $preview_type = $this->mapPreviewType($extension);
-            
-            // Determine initial conversion status
-            $needsConversion = in_array($preview_type, ['image', 'video', 'office', 'pdf']);
-            $conversion_status = $needsConversion ? 'pending' : 'done';
-
-            $gallery = Gallery::create([
-                'user_id' => $user_id,
-                'folder_id' => $folder_id,
-                'file' => $safeName,
-                'nama_tampilan' => $displayName,
-                'ukuran' => $fileSize,
-                'compressed_size' => $compressedSize,
-                'izin' => 1,
-                'path' => $fullPath,
-                'mime_type' => $mime_type,
-                'extension' => $extension,
-                'preview_type' => $preview_type,
-                'conversion_status' => $conversion_status,
-                'riwayat' => now()
-            ]);
-
-            if ($needsConversion) {
-                \App\Jobs\ProcessFilePreview::dispatch($gallery->id);
+            try {
+                $gallery = app(FileUploadService::class)->store(
+                    $user,
+                    $file,
+                    $folder_id ? (int) $folder_id : null,
+                    $this->sanitizeDisplayName($file)
+                );
+            } catch (\Illuminate\Auth\Access\AuthorizationException $e) {
+                return back()->with('error', $e->getMessage());
             }
 
-            // Update storage used
-            $user->increment('storage_used_bytes', $fileSize);
-
-            Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
-
-            return back()->with('nama_tampil', $displayName);
+            return back()->with('nama_tampil', $gallery->nama_tampilan);
         }
         return back()->with('error', 'Gagal upload file');
     }
@@ -466,14 +402,10 @@ class Beranda extends Controller
     public function open_file($id)
     {
         $user = auth()->user();
-        
-        // SECURITY: Hardened access layer - filter by user_id + izin + exclude trashed
-        $file = Gallery::whereNull('deleted_at')
-            ->where(function ($q) use ($user) {
-                $q->where('user_id', $user->id)
-                  ->orWhere('izin', 1);
-            })
-            ->findOrFail($id);
+        $file = Gallery::whereNull('deleted_at')->findOrFail($id);
+        if (!\App\Services\RbacScopeService::canAccessFile($user, $file)) {
+            abort(403, 'Unauthorized.');
+        }
 
         // Gunakan path dari database, jangan reconstruct
         $path = Storage::disk('local')->path($file->path);
@@ -673,85 +605,18 @@ class Beranda extends Controller
             ]);
 
             $file = $request->file('file');
-            $fileSize = $file->getSize();
             $user = auth()->user();
-            $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension());
-
-            // Exclude restrictions: Block .exe, .iso
-            if (in_array($extension, ['exe', 'iso'])) {
-                return response()->json(['message' => 'Ekstensi file .exe dan .iso diblokir untuk alasan keamanan.'], 422);
-            }
-
-            // Block .mp4 > 50 MB
-            if ($extension === 'mp4' && $fileSize > (50 * 1024 * 1024)) {
-                return response()->json(['message' => 'File MP4 tidak boleh lebih dari 50 MB.'], 422);
-            }
-
-            if (!$user->hasAvailableStorage($fileSize)) {
-                return response()->json(['message' => 'Penyimpanan penuh'], 422);
-            }
-
-            $uuid = \Illuminate\Support\Str::uuid()->toString();
-            $safeName = $uuid . '.zip';
-            $displayName = $this->sanitizeDisplayName($file);
-            
             $folder_id = ltrim($request->input('folder_id') ?? '', 'f');
             if (empty($folder_id) || $folder_id === 'null' || $folder_id === 'undefined') {
                 $folder_id = null;
             }
 
-            if ($folder_id) {
-                $targetFolder = Folder::findOrFail($folder_id);
-                if (!\App\Services\RbacScopeService::canWriteFolder($user, $targetFolder)) {
-                    return response()->json(['message' => 'Anda tidak memiliki akses menulis di folder ini.'], 403);
-                }
-            }
-
-            $user_id = $user->id;
-
-            $mime_type = $file->getMimeType();
-
-            $storage_path = "users/{$user_id}/original";
-            Storage::disk('local')->makeDirectory($storage_path);
-
-            $tempZipPath = FileArchiveService::createZipFromUpload($file, $displayName);
-
-            $compressedSize = filesize($tempZipPath);
-
-            // Store ZIP in local storage
-            Storage::disk('local')->putFileAs($storage_path, new \Illuminate\Http\File($tempZipPath), $safeName);
-            @unlink($tempZipPath);
-
-            $fullPath = $storage_path . '/' . $safeName;
-
-            $preview_type = $this->mapPreviewType($extension);
-            
-            // Determine initial conversion status
-            $needsConversion = in_array($preview_type, ['image', 'video', 'office', 'pdf']);
-            $conversion_status = $needsConversion ? 'pending' : 'done';
-
-            $gallery = Gallery::create([
-                'user_id' => $user_id,
-                'folder_id' => $folder_id,
-                'file' => $safeName,
-                'nama_tampilan' => $displayName,
-                'ukuran' => $fileSize,
-                'compressed_size' => $compressedSize,
-                'izin' => 1,
-                'path' => $fullPath,
-                'mime_type' => $mime_type,
-                'extension' => $extension,
-                'preview_type' => $preview_type,
-                'conversion_status' => $conversion_status,
-                'riwayat' => now()
-            ]);
-
-            if ($needsConversion) {
-                \App\Jobs\ProcessFilePreview::dispatch($gallery->id);
-            }
-
-            $user->increment('storage_used_bytes', $fileSize);
-            Wallet::firstOrCreate(['user_id' => $user_id], ['koin' => 0])->increment('koin', 10);
+            $gallery = app(FileUploadService::class)->store(
+                $user,
+                $file,
+                $folder_id ? (int) $folder_id : null,
+                $this->sanitizeDisplayName($file)
+            );
 
             return response()->json([
                 'id' => (string)$gallery->id,
@@ -765,6 +630,9 @@ class Beranda extends Controller
         } catch (\Throwable $e) {
             if ($e instanceof \Illuminate\Validation\ValidationException) {
                 throw $e;
+            }
+            if ($e instanceof \Illuminate\Auth\Access\AuthorizationException) {
+                return response()->json(['message' => $e->getMessage()], 403);
             }
             return response()->json(['message' => $e->getMessage()], 500);
         }
@@ -1151,11 +1019,10 @@ class Beranda extends Controller
     public function streamFile(Request $request, $id)
     {
         $user = auth()->user();
-        // SECURITY: exclude trashed files + ownership check
-        $file = Gallery::whereNull('deleted_at')->where(function($q) use ($user) {
-            $q->where('user_id', $user->id)
-              ->orWhere('izin', 1);
-        })->findOrFail($id);
+        $file = Gallery::whereNull('deleted_at')->findOrFail($id);
+        if (!\App\Services\RbacScopeService::canAccessFile($user, $file)) {
+            abort(403, 'Unauthorized.');
+        }
 
         // If requesting preview version (e.g. WebP image or PDF of a docx)
         if ($request->query('source') === 'preview' && $file->preview_path) {
