@@ -22,22 +22,3 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
-
-# Storage & Uploads (Privacy)
-/storage/app/data_user
-/storage/app/public/users
-/storage/app/converted
-/storage/framework/cache/data/*
-/storage/framework/sessions/*
-/storage/framework/views/*
-/storage/logs/*
-
-# Binaries
-/bin/poppler
-
-# Temp Scripts
-/check_db.php
-/reset_id4.php
-/process_pdfs.php
-/test2.php
-/poppler.zip

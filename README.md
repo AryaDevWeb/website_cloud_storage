@@ -1,108 +1,59 @@
-# Cloud Storage
+<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
-Cloud Storage is a Laravel-based file management application for school storage workflows. It provides a web interface, a Sanctum-protected REST API, scoped shared drives, quota tracking, soft delete, starring, sharing, and asynchronous file preview processing.
+<p align="center">
+<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
+<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
+</p>
 
-## Features
+## About Laravel
 
-- File upload, download, rename, move, star, share, restore, and permanent delete.
-- Recursive folder management with soft delete support.
-- Role and scope access control for `admin`, `guru_wali`, `guru_jurusan`, `tendik`, and `siswa`.
-- Shared drives by class, major, and staff scope.
-- Private file uploads by default, with explicit public sharing.
-- Storage quota tracking per user.
-- Original files archived as ZIP and restored on download/stream.
-- Background preview generation for images, videos, office files, and PDFs.
-- Mobile/API access through `/api/v1` with Laravel Sanctum.
+Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
 
-## Tech Stack
+- [Simple, fast routing engine](https://laravel.com/docs/routing).
+- [Powerful dependency injection container](https://laravel.com/docs/container).
+- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
+- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
+- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
+- [Robust background job processing](https://laravel.com/docs/queues).
+- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
 
-- PHP 8.2+
-- Laravel 12
-- PostgreSQL
-- Laravel Sanctum
-- Laravel Socialite
-- Tailwind CSS 4
-- Vite
-- Vanilla JavaScript modules
-- `league/flysystem-aws-s3-v3`
-- `smalot/pdfparser`
-- `spatie/pdf-to-text`
+Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
-## Project Structure
+## Learning Laravel
 
-```text
-app/
-  Http/Controllers/        Web controllers
-  Http/Controllers/Api/    API controllers
-  Jobs/                    Queue jobs for preview processing
-  Models/                  Eloquent models
-  Services/                Shared domain services
-database/
-  migrations/              Database schema changes
-  seeders/                 Master validation and shared drive seeders
-resources/
-  css/                     Tailwind entry
-  js/modules/              Frontend modules
-  views/                   Blade views
-routes/
-  web.php                  Web and session-based JSON routes
-  api.php                  Sanctum API routes
-tests/
-  Feature/                 Feature tests
-  Unit/                    Unit tests
-```
+Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
 
-## Setup
+If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
 
-```bash
-composer install
-npm install
-cp .env.example .env
-php artisan key:generate
-php artisan migrate --seed
-npm run build
-```
+## Laravel Sponsors
 
-For local development:
+We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
 
-```bash
-php artisan serve
-npm run dev
-php artisan queue:work
-```
+### Premium Partners
 
-## API Overview
+- **[Vehikl](https://vehikl.com)**
+- **[Tighten Co.](https://tighten.co)**
+- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
+- **[64 Robots](https://64robots.com)**
+- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
+- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
+- **[Redberry](https://redberry.international/laravel-development)**
+- **[Active Logic](https://activelogic.com)**
 
-Public authentication endpoints:
+## Contributing
 
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/google`
+Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
 
-Protected endpoints require `Authorization: Bearer <token>`:
+## Code of Conduct
 
-- `GET /api/v1/auth/me`
-- `POST /api/v1/auth/logout`
-- `GET /api/v1/files`
-- `POST /api/v1/files`
-- `GET /api/v1/files/{id}`
-- `GET /api/v1/files/{id}/download`
-- `GET /api/v1/files/{id}/stream`
-- `PATCH /api/v1/files/{id}`
-- `DELETE /api/v1/files/{id}`
-- `GET /api/v1/folders`
-- `POST /api/v1/folders`
-- `GET /api/v1/folders/tree`
+In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
 
-## Verification
+## Security Vulnerabilities
 
-```bash
-php artisan test
-npm run build
-```
+If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
 
-## Notes
+## License
 
-- Google OAuth registration is limited to users found in `master_validations` or emails configured in `LOCAL_ADMIN_EMAILS`.
-- Uploaded files are private by default. Public access is controlled through the `izin` field.
-- Preview URLs exposed by the API use Sanctum-protected `/api/v1/files/{id}/stream`.
+The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).

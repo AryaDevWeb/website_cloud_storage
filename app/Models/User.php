@@ -2,81 +2,48 @@
 
 namespace App\Models;
 
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Laravel\Sanctum\HasApiTokens;
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory;
+    /** @use HasFactory<UserFactory> */
+    use HasFactory, Notifiable;
 
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
     protected $fillable = [
         'name',
         'email',
-        'username',
-        'google_id',
-        'avatar',
-        'role',
-        'target_kelas',
-        'target_jurusan',
-        'storage_limit_bytes',
-        'storage_used_bytes',
         'password',
     ];
 
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var list<string>
+     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    protected $casts = [
-        'storage_limit_bytes' => 'integer',
-        'storage_used_bytes'  => 'integer',
-    ];
-
-    public function hasAvailableStorage(int $incomingBytes): bool
-    {
-        return ($this->storage_used_bytes + $incomingBytes) <= $this->storage_limit_bytes;
-    }
-
     /**
-     * Legacy column mapping for storage_quota (storage_limit_bytes)
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
      */
-    public function getStorageQuotaAttribute()
+    protected function casts(): array
     {
-        return $this->storage_limit_bytes;
-    }
-
-    public function setStorageQuotaAttribute($value)
-    {
-        $this->attributes['storage_limit_bytes'] = $value;
-    }
-
-    /**
-     * Legacy column mapping for storage_used (storage_used_bytes)
-     */
-    public function getStorageUsedAttribute()
-    {
-        return $this->storage_used_bytes;
-    }
-
-    public function setStorageUsedAttribute($value)
-    {
-        $this->attributes['storage_used_bytes'] = $value;
-    }
-
-    public function galleries()
-    {
-        return $this->hasMany(Gallery::class);
-    }
-
-    public function wallets()
-    {
-        return $this->hasOne(Wallet::class);
-    }
-
-    public function folders()
-    {
-        return $this->hasMany(Folder::class);
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+        ];
     }
 }
