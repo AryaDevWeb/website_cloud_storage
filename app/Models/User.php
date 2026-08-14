@@ -2,29 +2,29 @@
 
 namespace App\Models;
 
+use App\Enums\UserStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Spatie\Permission\Traits\HasRoles;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements HasMedia
 {
-    use HasFactory, Notifiable, HasRoles, InteractsWithMedia;
+    use HasFactory, HasRoles, InteractsWithMedia, Notifiable;
 
     protected $fillable = [
         'name',
         'email',
         'password',
-        'nisn', // Student ID
-        'nip',  // Teacher ID
         'phone',
         'address',
         'birth_date',
         'gender',
         'profile_photo',
-        'is_active',
+        'status',
     ];
 
     protected $hidden = [
@@ -36,54 +36,61 @@ class User extends Authenticatable implements HasMedia
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'birth_date' => 'date',
-            'is_active' => 'boolean',
+            'password'          => 'hashed',
+            'birth_date'        => 'date',
+            'status'            => UserStatus::class,
         ];
     }
 
+    // -------------------------------------------------------------------------
     // Relationships
-    public function studentRecords()
+    // -------------------------------------------------------------------------
+
+    public function teacherProfile(): HasOne
     {
-        return $this->hasMany(StudentRecord::class);
+        return $this->hasOne(TeacherProfile::class);
     }
 
-    public function teacherAssignments()
+    public function studentProfile(): HasOne
     {
-        return $this->hasMany(TeacherAssignment::class);
+        return $this->hasOne(StudentProfile::class);
     }
 
-    public function homeroomClassrooms()
-    {
-        return $this->hasMany(Classroom::class, 'homeroom_teacher_id');
-    }
-
-    public function departmentHeads()
-    {
-        return $this->hasMany(DepartmentHead::class);
-    }
-
-    // Helper methods
-    public function getCurrentClassroom()
-    {
-        return $this->studentRecords()
-            ->where('academic_year', now()->year . '/' . (now()->year + 1))
-            ->first()
-            ?->classroom;
-    }
-
-    public function isStudent(): bool
-    {
-        return $this->hasRole('student');
-    }
-
-    public function isTeacher(): bool
-    {
-        return $this->hasRole('teacher') || $this->hasRole('homeroom_teacher') || $this->hasRole('department_head');
-    }
+    // -------------------------------------------------------------------------
+    // Role helpers
+    // -------------------------------------------------------------------------
 
     public function isAdmin(): bool
     {
         return $this->hasRole('admin');
+    }
+
+    public function isGuru(): bool
+    {
+        return $this->hasRole('guru');
+    }
+
+    public function isSiswa(): bool
+    {
+        return $this->hasRole('siswa');
+    }
+
+    // -------------------------------------------------------------------------
+    // Status helpers
+    // -------------------------------------------------------------------------
+
+    public function isActive(): bool
+    {
+        return $this->status === UserStatus::ACTIVE;
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === UserStatus::PENDING;
+    }
+
+    public function isSuspended(): bool
+    {
+        return $this->status === UserStatus::SUSPENDED;
     }
 }
