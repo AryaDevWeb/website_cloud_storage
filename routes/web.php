@@ -2,14 +2,16 @@
 
 use Illuminate\Support\Facades\Route;
 
+// ─── Public ───────────────────────────────────────────────────────────────────
 Route::view('/', 'welcome');
 
-Route::view('dashboard', 'dashboard')
-    ->middleware(['auth', 'verified'])
-    ->name('dashboard');
+// Informational page for PENDING accounts (accessible without full authentication)
+Route::view('/account/pending', 'auth.account-pending')->name('auth.pending');
 
-Route::view('profile', 'profile')
-    ->middleware(['auth'])
-    ->name('profile');
+// ─── Authenticated ────────────────────────────────────────────────────────────
+Route::middleware(['auth', 'verified', 'active'])->group(function () {
+    Route::view('dashboard', 'dashboard')->name('dashboard');
+    Route::view('profile', 'profile')->name('profile');
+});
 
 require __DIR__.'/auth.php';
