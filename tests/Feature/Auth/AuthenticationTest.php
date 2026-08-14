@@ -1,20 +1,27 @@
 <?php
 
+use App\Enums\UserStatus;
 use App\Models\User;
+use Database\Seeders\RolesAndPermissionsSeeder;
 use Livewire\Volt\Volt;
 
+beforeEach(function () {
+    $this->seed(RolesAndPermissionsSeeder::class);
+});
+
 test('login screen can be rendered', function () {
+
     $response = $this->get('/login');
 
     $response
         ->assertOk()
-        ->assertSeeVolt('pages.auth.login');
+        ->assertSeeVolt('auth.login');
 });
 
-test('users can authenticate using the login screen', function () {
-    $user = User::factory()->create();
+test('active user can authenticate using login screen', function () {
+    $user = User::factory()->create(['status' => UserStatus::ACTIVE]);
 
-    $component = Volt::test('pages.auth.login')
+    $component = Volt::test('auth.login')
         ->set('form.email', $user->email)
         ->set('form.password', 'password');
 
@@ -27,10 +34,10 @@ test('users can authenticate using the login screen', function () {
     $this->assertAuthenticated();
 });
 
-test('users can not authenticate with invalid password', function () {
-    $user = User::factory()->create();
+test('user cannot authenticate with invalid password', function () {
+    $user = User::factory()->create(['status' => UserStatus::ACTIVE]);
 
-    $component = Volt::test('pages.auth.login')
+    $component = Volt::test('auth.login')
         ->set('form.email', $user->email)
         ->set('form.password', 'wrong-password');
 
@@ -43,8 +50,8 @@ test('users can not authenticate with invalid password', function () {
     $this->assertGuest();
 });
 
-test('navigation menu can be rendered', function () {
-    $user = User::factory()->create();
+test('navigation menu can be rendered for active user', function () {
+    $user = User::factory()->create(['status' => UserStatus::ACTIVE]);
 
     $this->actingAs($user);
 
@@ -55,8 +62,8 @@ test('navigation menu can be rendered', function () {
         ->assertSeeVolt('layout.navigation');
 });
 
-test('users can logout', function () {
-    $user = User::factory()->create();
+test('user can logout', function () {
+    $user = User::factory()->create(['status' => UserStatus::ACTIVE]);
 
     $this->actingAs($user);
 
