@@ -5,7 +5,7 @@ use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
 
-new #[Layout('layouts.guest')] class extends Component
+new #[Layout('layouts.guest', ['title' => 'Konfirmasi Password'])] class extends Component
 {
     public string $password = '';
 
@@ -19,7 +19,7 @@ new #[Layout('layouts.guest')] class extends Component
         ]);
 
         if (! Auth::guard('web')->validate([
-            'email' => Auth::user()->email,
+            'email'    => Auth::user()->email,
             'password' => $this->password,
         ])) {
             throw ValidationException::withMessages([
@@ -34,29 +34,31 @@ new #[Layout('layouts.guest')] class extends Component
 }; ?>
 
 <div>
-    <div class="mb-4 text-sm text-gray-600">
-        {{ __('This is a secure area of the application. Please confirm your password before continuing.') }}
-    </div>
+    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+        Konfirmasi Password
+    </h2>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+        Ini adalah area aman. Konfirmasi password Anda sebelum melanjutkan.
+    </p>
 
-    <form wire:submit="confirmPassword">
-        <!-- Password -->
+    <form wire:submit="confirmPassword" class="space-y-5">
         <div>
             <x-input-label for="password" :value="__('Password')" />
-
-            <x-text-input wire:model="password"
-                          id="password"
-                          class="block mt-1 w-full"
-                          type="password"
-                          name="password"
-                          required autocomplete="current-password" />
-
+            <x-text-input
+                wire:model="password"
+                id="password"
+                class="block mt-1 w-full"
+                type="password"
+                name="password"
+                required
+                autofocus
+                autocomplete="current-password"
+            />
             <x-input-error :messages="$errors->get('password')" class="mt-2" />
         </div>
 
-        <div class="flex justify-end mt-4">
-            <x-primary-button>
-                {{ __('Confirm') }}
-            </x-primary-button>
-        </div>
+        <x-primary-button class="w-full justify-center">
+            {{ __('Konfirmasi') }}
+        </x-primary-button>
     </form>
 </div>
