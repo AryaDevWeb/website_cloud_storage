@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Enums\UserStatus;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use RuntimeException;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -12,6 +13,14 @@ class RolesAndPermissionsSeeder extends Seeder
 {
     public function run(): void
     {
+        $initialPassword = env('ADMIN_INITIAL_PASSWORD', 'password-secure-dev-only');
+
+        if (app()->environment('production') && blank(env('ADMIN_INITIAL_PASSWORD'))) {
+            throw new RuntimeException(
+                'ADMIN_INITIAL_PASSWORD must be set in the production environment before running the seeder.'
+            );
+        }
+
         // Reset cached roles and permissions
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
@@ -71,7 +80,7 @@ class RolesAndPermissionsSeeder extends Seeder
             ['email' => 'admin@smkn1lumajang.sch.id'],
             [
                 'name'     => 'Administrator',
-                'password' => bcrypt('password'),
+                'password' => bcrypt($initialPassword),
                 'status'   => UserStatus::ACTIVE,
             ]
         );
@@ -83,7 +92,7 @@ class RolesAndPermissionsSeeder extends Seeder
             ['email' => 'guru@smkn1lumajang.sch.id'],
             [
                 'name'     => 'Guru Demo',
-                'password' => bcrypt('password'),
+                'password' => bcrypt($initialPassword),
                 'status'   => UserStatus::ACTIVE,
             ]
         );
@@ -98,7 +107,7 @@ class RolesAndPermissionsSeeder extends Seeder
             ['email' => 'siswa@smkn1lumajang.sch.id'],
             [
                 'name'     => 'Siswa Demo',
-                'password' => bcrypt('password'),
+                'password' => bcrypt($initialPassword),
                 'status'   => UserStatus::ACTIVE,
             ]
         );

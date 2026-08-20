@@ -3,7 +3,10 @@
 namespace App\Models;
 
 use App\Enums\UserStatus;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -11,7 +14,7 @@ use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements HasMedia
+class User extends Authenticatable implements FilamentUser, HasMedia
 {
     use HasFactory, HasRoles, InteractsWithMedia, Notifiable;
 
@@ -56,6 +59,36 @@ class User extends Authenticatable implements HasMedia
         return $this->hasOne(StudentProfile::class);
     }
 
+    public function homeroomClassrooms(): HasMany
+    {
+        return $this->hasMany(Classroom::class, 'homeroom_teacher_id');
+    }
+
+    public function teacherAssignments(): HasMany
+    {
+        return $this->hasMany(TeacherAssignment::class);
+    }
+
+    public function studentRecords(): HasMany
+    {
+        return $this->hasMany(StudentRecord::class);
+    }
+
+    public function departmentHeads(): HasMany
+    {
+        return $this->hasMany(DepartmentHead::class);
+    }
+
+    public function folders(): HasMany
+    {
+        return $this->hasMany(Folder::class);
+    }
+
+    public function storageQuota(): HasOne
+    {
+        return $this->hasOne(StorageQuota::class);
+    }
+
     // -------------------------------------------------------------------------
     // Role helpers
     // -------------------------------------------------------------------------
@@ -73,6 +106,14 @@ class User extends Authenticatable implements HasMedia
     public function isSiswa(): bool
     {
         return $this->hasRole('siswa');
+    }
+
+    /**
+     * Determine whether the user may access the Filament admin panel.
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return $this->hasRole('admin') && $this->status === UserStatus::ACTIVE;
     }
 
     // -------------------------------------------------------------------------
