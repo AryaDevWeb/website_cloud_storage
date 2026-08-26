@@ -17,6 +17,9 @@ Route::middleware(['auth', 'signed', 'throttle:60,1'])
 Route::middleware(['auth', 'verified', 'active'])->group(function () {
     Route::view('dashboard', 'dashboard')->name('dashboard');
     Route::view('profile', 'profile')->name('profile');
+    Volt::route('storage/{section?}', 'storage.index')
+        ->whereIn('section', ['files', 'shared', 'sent', 'trash', 'audit'])
+        ->name('storage.index');
 });
 
 require __DIR__.'/auth.php';
