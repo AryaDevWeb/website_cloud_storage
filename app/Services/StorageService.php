@@ -3,12 +3,14 @@
 namespace App\Services;
 
 use App\Models\Folder;
+use App\Models\Media;
 use App\Models\StorageQuota;
+use App\Models\StorageAuditLog;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
-use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 class StorageService
 {
@@ -55,13 +57,19 @@ class StorageService
 
             $media->forceFill(['folder_id' => $folder?->id])->save();
             $quota->updateUsage($size);
+            StorageAuditLog::log('upload', $media, ['size' => $size]);
 
             return $media;
         });
     }
 
-    public function delete(Media $media): void
+    public function delete(Media $media, ?User $actor = null): void
     {
+        $actor ??= auth()->user();
+        if ($actor) {
+            Gate::forUser($actor)->authorize('delete', $media);
+        }
+
         DB::transaction(function () use ($media): void {
             if ($media->model_type === User::class) {
                 $quota = StorageQuota::query()->where('user_id', $media->model_id)->lockForUpdate()->first();
@@ -69,7 +77,41 @@ class StorageService
             }
 
             $media->delete();
+            StorageAuditLog::log('delete', $media, ['size' => $media->size]);
         });
+    }
+
+    public function restore(Media $media, ?User $actor = null): void
+    {
+        $actor ??= auth()->user();
+        if ($actor) {
+            Gate::forUser($actor)->authorize('restore', $media);
+        }
+
+        DB::transaction(function () use ($media): void {
+            if (! $media->trashed()) {
+                return;
+            }
+
+            $quota = StorageQuota::query()->where('user_id', $media->model_id)->lockForUpdate()->first();
+
+            if ($quota) {
+                $quota->updateUsage((int) $media->size);
+            }
+
+            $media->restore();
+            StorageAuditLog::log('restore', $media);
+        });
+    }
+
+    public function permanentlyDelete(Media $media, ?User $actor = null): void
+    {
+        $actor ??= auth()->user();
+        if ($actor) {
+            Gate::forUser($actor)->authorize('forceDelete', $media);
+        }
+
+        $media->forceDelete();
     }
 
     private function validateFile(UploadedFile $file): void
