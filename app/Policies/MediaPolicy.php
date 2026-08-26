@@ -3,7 +3,7 @@
 namespace App\Policies;
 
 use App\Models\User;
-use Spatie\MediaLibrary\MediaCollections\Models\Media;
+use App\Models\Media;
 
 class MediaPolicy
 {
@@ -20,6 +20,26 @@ class MediaPolicy
     }
 
     public function delete(User $user, Media $media): bool
+    {
+        return $this->view($user, $media);
+    }
+
+    public function share(User $user, Media $media): bool
+    {
+        return $this->view($user, $media);
+    }
+
+    public function viewAny(User $user): bool
+    {
+        return $user->isAdmin() && $user->isActive();
+    }
+
+    public function restore(User $user, Media $media): bool
+    {
+        return $this->view($user, $media);
+    }
+
+    public function forceDelete(User $user, Media $media): bool
     {
         return $this->view($user, $media);
     }
