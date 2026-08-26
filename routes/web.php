@@ -1,9 +1,10 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Livewire\Volt\Volt;
 
 // ─── Public ───────────────────────────────────────────────────────────────────
-Route::view('/', 'welcome');
+Route::redirect('/', '/login');
 
 // Informational page for PENDING accounts (accessible without full authentication)
 Route::view('/account/pending', 'auth.account-pending')->name('auth.pending');
