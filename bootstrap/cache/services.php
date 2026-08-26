@@ -51,7 +51,8 @@
     47 => 'Spatie\\Permission\\PermissionServiceProvider',
     48 => 'App\\Providers\\AppServiceProvider',
     49 => 'App\\Providers\\Filament\\AdminPanelProvider',
-    50 => 'App\\Providers\\VoltServiceProvider',
+    50 => 'App\\Providers\\Filament\\WorkspacePanelProvider',
+    51 => 'App\\Providers\\VoltServiceProvider',
   ),
   'eager' => 
   array (
@@ -89,7 +90,8 @@
     31 => 'Spatie\\Permission\\PermissionServiceProvider',
     32 => 'App\\Providers\\AppServiceProvider',
     33 => 'App\\Providers\\Filament\\AdminPanelProvider',
-    34 => 'App\\Providers\\VoltServiceProvider',
+    34 => 'App\\Providers\\Filament\\WorkspacePanelProvider',
+    35 => 'App\\Providers\\VoltServiceProvider',
   ),
   'deferred' => 
   array (

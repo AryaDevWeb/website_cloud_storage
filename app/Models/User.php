@@ -113,7 +113,11 @@ class User extends Authenticatable implements FilamentUser, HasMedia
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->hasRole('admin') && $this->status === UserStatus::ACTIVE;
+        return match ($panel->getId()) {
+            'admin' => $this->hasRole('admin') && $this->status === UserStatus::ACTIVE,
+            'workspace' => $this->status === UserStatus::ACTIVE,
+            default => false,
+        };
     }
 
     // -------------------------------------------------------------------------
