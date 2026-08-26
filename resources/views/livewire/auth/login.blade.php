@@ -25,7 +25,7 @@ new #[Layout('layouts.guest', ['title' => 'Masuk'])] class extends Component
 }; ?>
 
 <div>
-    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+    <h2 class="text-xl font-bold text-zinc-900 dark:text-white mb-6">
         Masuk ke Akun
     </h2>
 
@@ -71,15 +71,15 @@ new #[Layout('layouts.guest', ['title' => 'Masuk'])] class extends Component
                     wire:model="form.remember"
                     id="remember"
                     type="checkbox"
-                    class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700"
+                    class="rounded-md border-zinc-300 dark:border-zinc-700 text-sky-500 shadow-sm focus:ring-sky-400 dark:bg-zinc-800 dark:focus:ring-offset-zinc-900"
                     name="remember"
                 >
-                <span class="text-sm text-gray-600 dark:text-gray-400">{{ __('Ingat saya') }}</span>
+                <span class="text-sm text-zinc-600 dark:text-zinc-400">{{ __('Ingat saya') }}</span>
             </label>
 
             @if (Route::has('password.request'))
                 <a
-                    class="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 underline underline-offset-4 focus:outline-none"
+                    class="text-sm text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 underline underline-offset-4 focus:outline-none"
                     href="{{ route('password.request') }}"
                     wire:navigate
                 >
@@ -93,9 +93,9 @@ new #[Layout('layouts.guest', ['title' => 'Masuk'])] class extends Component
         </x-primary-button>
     </form>
 
-    <p class="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+    <p class="mt-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
         Belum punya akun?
-        <a href="{{ route('register') }}" wire:navigate class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 font-medium underline underline-offset-4">
+        <a href="{{ route('register') }}" wire:navigate class="text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 font-medium underline underline-offset-4">
             Daftar sekarang
         </a>
     </p>

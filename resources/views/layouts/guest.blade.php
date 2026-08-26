@@ -13,21 +13,32 @@
 
         <!-- Scripts / Styles -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
+        <script>
+            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        </script>
     </head>
-    <body class="h-full font-sans text-gray-900 antialiased bg-gray-50 dark:bg-gray-900">
+    <body class="h-full font-sans antialiased text-zinc-900 bg-white dark:bg-zinc-950 dark:text-zinc-100">
 
-        <div class="min-h-screen flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div class="relative min-h-screen flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+            <!-- Theme Toggle Top Right -->
+            <div class="absolute top-5 right-5">
+                <x-theme-toggle class="bg-white/80 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 shadow-sm" />
+            </div>
 
-            <!-- School Branding -->
+            <!-- School / FLASK Branding -->
             <div class="mb-8 text-center">
                 <a href="/" wire:navigate class="inline-flex flex-col items-center gap-2 group">
-                    <x-application-logo class="w-16 h-16 fill-current text-indigo-600 dark:text-indigo-400 transition group-hover:opacity-80" />
+                    <x-application-logo class="h-20 w-auto transition-transform duration-200 group-hover:scale-105" />
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+                        <p class="text-xs font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400">
                             SMKN 1 Lumajang
                         </p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            Platform Digital Sekolah
+                        <p class="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                            Cloud Storage & Platform Digital Sekolah
                         </p>
                     </div>
                 </a>
@@ -35,7 +46,7 @@
 
             <!-- Card -->
             <div class="w-full sm:max-w-md">
-                <div class="bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 rounded-xl px-8 py-8">
+                <div class="bg-white dark:bg-zinc-900 shadow-xl border border-zinc-200 dark:border-zinc-800 rounded-2xl px-8 py-8">
                     {{ $slot }}
                 </div>
             </div>

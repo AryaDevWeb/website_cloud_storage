@@ -34,10 +34,10 @@ new #[Layout('layouts.guest', ['title' => 'Konfirmasi Password'])] class extends
 }; ?>
 
 <div>
-    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+    <h2 class="text-xl font-bold text-zinc-900 dark:text-white mb-2">
         Konfirmasi Password
     </h2>
-    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+    <p class="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
         Ini adalah area aman. Konfirmasi password Anda sebelum melanjutkan.
     </p>
 

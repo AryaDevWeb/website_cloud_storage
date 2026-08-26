@@ -61,7 +61,7 @@ new #[Layout('layouts.guest', ['title' => 'Reset Password'])] class extends Comp
 }; ?>
 
 <div>
-    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+    <h2 class="text-xl font-bold text-zinc-900 dark:text-white mb-6">
         Atur Ulang Password
     </h2>
 

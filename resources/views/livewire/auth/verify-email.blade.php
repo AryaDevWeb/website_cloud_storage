@@ -33,17 +33,17 @@ new #[Layout('layouts.guest', ['title' => 'Verifikasi Email'])] class extends Co
 }; ?>
 
 <div>
-    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+    <h2 class="text-xl font-bold text-zinc-900 dark:text-white mb-2">
         Verifikasi Email Anda
     </h2>
-    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+    <p class="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
         Terima kasih telah mendaftar! Sebelum melanjutkan, klik tautan verifikasi yang telah dikirim ke email Anda.
         Jika tidak menerima email, kami siap mengirimkannya kembali.
     </p>
 
     @if (session('status') === 'verification-link-sent')
-        <div class="mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-            <p class="text-sm font-medium text-green-700 dark:text-green-400">
+        <div class="mb-4 p-3 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 rounded-xl">
+            <p class="text-sm font-medium text-sky-700 dark:text-sky-400">
                 Tautan verifikasi baru telah dikirim ke email Anda.
             </p>
         </div>
@@ -57,7 +57,7 @@ new #[Layout('layouts.guest', ['title' => 'Verifikasi Email'])] class extends Co
         <button
             wire:click="logout"
             type="button"
-            class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 underline underline-offset-4"
+            class="text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 underline underline-offset-4"
         >
             {{ __('Keluar') }}
         </button>

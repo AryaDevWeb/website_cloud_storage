@@ -33,10 +33,10 @@ new #[Layout('layouts.guest', ['title' => 'Daftar'])] class extends Component
 }; ?>
 
 <div>
-    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-1">
+    <h2 class="text-xl font-bold text-zinc-900 dark:text-white mb-1">
         Buat Akun Baru
     </h2>
-    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+    <p class="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
         Akun akan diverifikasi oleh admin sekolah sebelum dapat digunakan.
     </p>
 
@@ -79,7 +79,7 @@ new #[Layout('layouts.guest', ['title' => 'Daftar'])] class extends Component
                 wire:model.live="form.role"
                 id="role"
                 name="role"
-                class="mt-1 block w-full border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm text-sm"
+                class="mt-1 block w-full border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800/90 text-zinc-900 dark:text-zinc-100 focus:border-sky-500 dark:focus:border-sky-400 focus:ring-sky-500 dark:focus:ring-sky-400 rounded-xl shadow-sm text-sm"
                 required
             >
                 <option value="siswa">Siswa</option>
@@ -101,7 +101,7 @@ new #[Layout('layouts.guest', ['title' => 'Daftar'])] class extends Component
                     maxlength="20"
                     required
                 />
-                <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Nomor Induk Siswa Nasional (10 digit)</p>
+                <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Nomor Induk Siswa Nasional (10 digit)</p>
                 <x-input-error :messages="$errors->get('form.nisn')" class="mt-2" />
             </div>
         @endif
@@ -119,7 +119,7 @@ new #[Layout('layouts.guest', ['title' => 'Daftar'])] class extends Component
                     maxlength="20"
                     required
                 />
-                <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">Nomor Induk Pegawai (18 digit)</p>
+                <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Nomor Induk Pegawai (18 digit)</p>
                 <x-input-error :messages="$errors->get('form.nip')" class="mt-2" />
             </div>
         @endif
@@ -159,9 +159,9 @@ new #[Layout('layouts.guest', ['title' => 'Daftar'])] class extends Component
         </x-primary-button>
     </form>
 
-    <p class="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+    <p class="mt-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
         Sudah punya akun?
-        <a href="{{ route('login') }}" wire:navigate class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 font-medium underline underline-offset-4">
+        <a href="{{ route('login') }}" wire:navigate class="text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 font-medium underline underline-offset-4">
             Masuk
         </a>
     </p>

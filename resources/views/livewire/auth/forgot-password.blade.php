@@ -30,10 +30,10 @@ new #[Layout('layouts.guest', ['title' => 'Lupa Password'])] class extends Compo
 }; ?>
 
 <div>
-    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+    <h2 class="text-xl font-bold text-zinc-900 dark:text-white mb-2">
         Lupa Password?
     </h2>
-    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">
+    <p class="text-sm text-zinc-500 dark:text-zinc-400 mb-6">
         Masukkan email Anda dan kami akan mengirimkan tautan untuk mengatur ulang password.
     </p>
 
@@ -60,9 +60,9 @@ new #[Layout('layouts.guest', ['title' => 'Lupa Password'])] class extends Compo
         </x-primary-button>
     </form>
 
-    <p class="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+    <p class="mt-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
         Ingat password Anda?
-        <a href="{{ route('login') }}" wire:navigate class="text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 font-medium underline underline-offset-4">
+        <a href="{{ route('login') }}" wire:navigate class="text-sky-600 hover:text-sky-500 dark:text-sky-400 dark:hover:text-sky-300 font-medium underline underline-offset-4">
             Kembali ke halaman masuk
         </a>
     </p>
